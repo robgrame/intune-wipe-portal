@@ -141,14 +141,30 @@ if ($AssignUserUpn) {
             appRoleId   = $role.id
         } | ConvertTo-Json -Compress
 
-        az rest --method POST `
-            --uri "https://graph.microsoft.com/v1.0/users/$($user.id)/appRoleAssignments" `
-            --headers "Content-Type=application/json" `
-            --body $body | Out-Null
-
-        Write-Host "    Assignment created."
+        # az cli on Windows mishandles inline JSON for --body; use a temp file.
+        $tmpBody = New-TemporaryFile
+        try {
+            Set-Content -LiteralPath $tmpBody -Value $body -NoNewline -Encoding utf8
+            az rest --method POST `
+                --uri "https://graph.microsoft.com/v1.0/users/$($user.id)/appRoleAssignments" `
+                --headers "Content-Type=application/json" `
+                --body "@$tmpBody" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Graph appRoleAssignment POST failed (exit $LASTEXITCODE)." }
+            Write-Host "    Assignment created."
+        } finally {
+            Remove-Item $tmpBody -ErrorAction SilentlyContinue
+        }
     }
 }
 
 Write-Host ""
 Write-Host "Done."
+
+# Emit a single object to the pipeline so callers (deploy.ps1) can capture
+# tenant/client/secret reliably without parsing host output.
+[pscustomobject]@{
+    TenantId     = (az account show --query tenantId -o tsv)
+    ClientId     = $appId
+    ObjectId     = $sp.id
+    ClientSecret = $clientSecret
+}

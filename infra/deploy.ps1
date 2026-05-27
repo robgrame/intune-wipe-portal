@@ -104,28 +104,23 @@ Write-Host "    Workspace customerId: $($law.customerId)"
 if (-not $SkipAppRegistration) {
     Write-Host ""
     Write-Host "==> Ensuring Entra app registration..."
-    $hostname = "$NamePrefix-portal-$((az group show --name $ResourceGroup --query id -o tsv) -replace '.*','').azurewebsites.net"
-    # We don't know the final hostname yet (it depends on uniqueString),
-    # so we run the script in two passes: first with a placeholder hostname
-    # to create the app + secret, then after deployment we'll patch the
-    # reply URL with the real hostname.
-    $placeholderHost = "placeholder.$NamePrefix.local"
-    $args = @(
-        '-WebAppHostname', $placeholderHost,
-        '-CreateClientSecret'
-    )
-    if ($RequireAssignment) { $args += '-RequireAssignment' }
-    & (Join-Path $PSScriptRoot 'entra\create-app-registration.ps1') @args |
-        Tee-Object -Variable regOutput
-
-    # Parse Tenant / Client / Secret out of the script's stdout.
-    $EntraTenantId    = ($regOutput | Select-String '^Tenant ID : (.+)$').Matches.Groups[1].Value.Trim()
-    $EntraClientId    = ($regOutput | Select-String '^Client ID : (.+)$').Matches.Groups[1].Value.Trim()
-    $secretLine       = ($regOutput | Select-String '^\s+([A-Za-z0-9\._~\-]{20,})$').Matches.Groups[1].Value.Trim()
-    if ([string]::IsNullOrWhiteSpace($secretLine)) {
-        throw "Failed to capture client secret from create-app-registration.ps1 output."
+    # We don't know the final hostname yet (depends on bicep uniqueString),
+    # so first pass uses a placeholder. Step 3 below patches the real URL
+    # once the Web App exists.
+    $placeholderHost = "placeholder-$NamePrefix.invalid"
+    $createArgs = @{
+        WebAppHostname     = $placeholderHost
+        CreateClientSecret = $true
     }
-    $EntraClientSecret = ConvertTo-SecureString $secretLine -AsPlainText -Force
+    if ($RequireAssignment) { $createArgs.RequireAssignment = $true }
+
+    $reg = & (Join-Path $PSScriptRoot 'entra\create-app-registration.ps1') @createArgs
+    if (-not $reg -or -not $reg.ClientId -or -not $reg.ClientSecret) {
+        throw "create-app-registration.ps1 did not return TenantId/ClientId/ClientSecret."
+    }
+    $EntraTenantId    = $reg.TenantId
+    $EntraClientId    = $reg.ClientId
+    $EntraClientSecret = ConvertTo-SecureString $reg.ClientSecret -AsPlainText -Force
 } else {
     if (-not $EntraTenantId -or -not $EntraClientId -or -not $EntraClientSecret) {
         throw "When -SkipAppRegistration is set, -EntraTenantId, -EntraClientId, and -EntraClientSecret are required."
