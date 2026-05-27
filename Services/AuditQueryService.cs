@@ -39,14 +39,14 @@ public sealed class AuditQueryService
     public async Task<KpiSummary> GetKpisAsync(TimeSpan window, CancellationToken ct)
     {
         var query = $$"""
-            customEvents
-            | where timestamp > ago({{ToKql(window)}})
-            | where name startswith "{{EventPrefix}}"
-            | summarize Count = count() by name
+            AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name startswith "{{EventPrefix}}"
+            | summarize Count = count() by Name
             """;
 
         var rows = await ExecuteAsync(query, window, ct,
-            r => new KpiRow(r.GetString("name") ?? "", r.GetInt64("Count") ?? 0));
+            r => new KpiRow(r.GetString("Name") ?? "", r.GetInt64("Count") ?? 0));
 
         var s = new KpiSummary();
         foreach (var row in rows)
@@ -70,15 +70,15 @@ public sealed class AuditQueryService
     public async Task<IReadOnlyList<TimeSeriesPoint>> GetTimeSeriesAsync(TimeSpan window, TimeSpan bucket, CancellationToken ct)
     {
         var query = $$"""
-            customEvents
-            | where timestamp > ago({{ToKql(window)}})
-            | where name in ("{{Accepted}}", "{{Issued}}")
-                  or name startswith "wipe.denied."
+            AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name in ("{{Accepted}}", "{{Issued}}")
+                  or Name startswith "wipe.denied."
             | summarize Count = count()
-                by Bucket = bin(timestamp, {{ToKql(bucket)}}),
+                by Bucket = bin(TimeGenerated, {{ToKql(bucket)}}),
                    EventName = case(
-                       name == "{{Accepted}}", "{{Accepted}}",
-                       name == "{{Issued}}",   "{{Issued}}",
+                       Name == "{{Accepted}}", "{{Accepted}}",
+                       Name == "{{Issued}}",   "{{Issued}}",
                        "wipe.denied.*")
             | order by Bucket asc
             """;
@@ -93,31 +93,31 @@ public sealed class AuditQueryService
     public async Task<IReadOnlyList<DenyBreakdownRow>> GetDenyBreakdownAsync(TimeSpan window, CancellationToken ct)
     {
         var query = $$"""
-            customEvents
-            | where timestamp > ago({{ToKql(window)}})
-            | where name startswith "wipe.denied."
-            | summarize Count = count() by name
+            AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name startswith "wipe.denied."
+            | summarize Count = count() by Name
             | order by Count desc
             """;
 
         return await ExecuteAsync(query, window, ct,
-            r => new DenyBreakdownRow(r.GetString("name") ?? "", r.GetInt64("Count") ?? 0));
+            r => new DenyBreakdownRow(r.GetString("Name") ?? "", r.GetInt64("Count") ?? 0));
     }
 
     public async Task<IReadOnlyList<AuditEventRow>> GetRecentEventsAsync(int take, TimeSpan window, CancellationToken ct)
     {
         var query = $$"""
-            customEvents
-            | where timestamp > ago({{ToKql(window)}})
-            | where name startswith "{{EventPrefix}}"
-            | extend corr   = tostring(customDimensions.correlationId),
-                     device = tostring(customDimensions.deviceName),
-                     intune = tostring(customDimensions.intuneDeviceId),
-                     entra  = tostring(customDimensions.entraDeviceId),
-                     reason = tostring(customDimensions.reason),
-                     exType = tostring(customDimensions.exceptionType)
-            | project timestamp, name, corr, device, intune, entra, reason, exType
-            | order by timestamp desc
+            AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name startswith "{{EventPrefix}}"
+            | extend corr   = tostring(Properties.correlationId),
+                     device = tostring(Properties.deviceName),
+                     intune = tostring(Properties.intuneDeviceId),
+                     entra  = tostring(Properties.entraDeviceId),
+                     reason = tostring(Properties.reason),
+                     exType = tostring(Properties.exceptionType)
+            | project TimeGenerated, Name, corr, device, intune, entra, reason, exType
+            | order by TimeGenerated desc
             | take {{take}}
             """;
 
@@ -136,26 +136,26 @@ public sealed class AuditQueryService
         }
 
         var query = $$"""
-            customEvents
-            | where timestamp > ago(30d)
-            | where name startswith "{{EventPrefix}}"
-            | where tostring(customDimensions.correlationId) == "{{correlationId}}"
-            | extend corr   = tostring(customDimensions.correlationId),
-                     device = tostring(customDimensions.deviceName),
-                     intune = tostring(customDimensions.intuneDeviceId),
-                     entra  = tostring(customDimensions.entraDeviceId),
-                     reason = tostring(customDimensions.reason),
-                     exType = tostring(customDimensions.exceptionType)
-            | project timestamp, name, corr, device, intune, entra, reason, exType
-            | order by timestamp asc
+            AppEvents
+            | where TimeGenerated > ago(30d)
+            | where Name startswith "{{EventPrefix}}"
+            | where tostring(Properties.correlationId) == "{{correlationId}}"
+            | extend corr   = tostring(Properties.correlationId),
+                     device = tostring(Properties.deviceName),
+                     intune = tostring(Properties.intuneDeviceId),
+                     entra  = tostring(Properties.entraDeviceId),
+                     reason = tostring(Properties.reason),
+                     exType = tostring(Properties.exceptionType)
+            | project TimeGenerated, Name, corr, device, intune, entra, reason, exType
+            | order by TimeGenerated asc
             """;
 
         return await ExecuteAsync(query, TimeSpan.FromDays(30), ct, MapAuditRow);
     }
 
     private static AuditEventRow MapAuditRow(LogsTableRow r) => new(
-        r.GetDateTimeOffset("timestamp") ?? DateTimeOffset.MinValue,
-        r.GetString("name") ?? "",
+        r.GetDateTimeOffset("TimeGenerated") ?? DateTimeOffset.MinValue,
+        r.GetString("Name") ?? "",
         r.GetString("corr") ?? "",
         NullIfEmpty(r.GetString("device")),
         NullIfEmpty(r.GetString("intune")),
