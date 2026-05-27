@@ -1,0 +1,6 @@
+@using Microsoft.AspNetCore.Authorization
+
+@* Belt-and-suspenders: in addition to the endpoint FallbackPolicy in
+   Program.cs, every page in this folder requires the CanRead policy
+   at the component-routing layer. *@
+@attribute [Authorize(Policy = "CanRead")]

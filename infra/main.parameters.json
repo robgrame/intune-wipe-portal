@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix":                { "value": "intwipe" },
+    "logAnalyticsWorkspaceName": { "value": "<from api deployment, e.g. intwipe-law-qupxwx6egkr3e>" },
+    "entraTenantId":             { "value": "<tenant guid>" },
+    "entraClientId":             { "value": "<portal app registration client id>" },
+    "entraDomain":               { "value": "<tenant>.onmicrosoft.com" },
+    "entraClientSecret":         { "value": "<set via -entraClientSecret parameter at deploy time, never commit>" },
+    "appServicePlanSku":         { "value": "B1" }
+  }
+}

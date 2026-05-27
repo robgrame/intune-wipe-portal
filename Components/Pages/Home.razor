@@ -1,0 +1,135 @@
+@page "/"
+@rendermode InteractiveServer
+@inject AuditQueryService Audit
+
+<PageTitle>Wipe dashboard</PageTitle>
+
+<h1 class="mb-3">Wipe dashboard</h1>
+<p class="text-muted">Last 24 hours · auto refresh every 60s</p>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger">
+        Errore caricamento dati: @_loadError
+    </div>
+}
+
+@if (_kpis is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        @KpiCard("Richieste totali", _kpis.TotalRequests, "primary")
+        @KpiCard("Accettate", _kpis.Accepted, "success")
+        @KpiCard("Negate", _kpis.Denied, "warning")
+        @KpiCard("Wipe inviati", _kpis.WipesIssued, "info")
+        @KpiCard("Errori transient", _kpis.TransientErrors, "secondary")
+        @KpiCard("Fail permanenti", _kpis.PermanentFailures, "danger")
+    </div>
+
+    <h2 class="h5">Deny breakdown (24h)</h2>
+    @if (_denies is null || _denies.Count == 0)
+    {
+        <p class="text-muted">Nessun evento denied nel periodo.</p>
+    }
+    else
+    {
+        <table class="table table-sm table-striped">
+            <thead><tr><th>Evento</th><th class="text-end">Conteggio</th></tr></thead>
+            <tbody>
+            @foreach (var d in _denies)
+            {
+                <tr><td><code>@d.EventName</code></td><td class="text-end">@d.Count</td></tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    <h2 class="h5 mt-4">Ultimi eventi</h2>
+    @if (_recent is null || _recent.Count == 0)
+    {
+        <p class="text-muted">Nessun evento.</p>
+    }
+    else
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Timestamp (UTC)</th>
+                    <th>Evento</th>
+                    <th>Device</th>
+                    <th>Reason</th>
+                    <th>Trail</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var e in _recent)
+            {
+                <tr>
+                    <td>@e.Timestamp.UtcDateTime.ToString("u")</td>
+                    <td><code>@e.EventName</code></td>
+                    <td>@(e.DeviceName ?? "-")</td>
+                    <td>@(e.Reason ?? "-")</td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(e.CorrelationId))
+                        {
+                            <a href="@($"/audit/{e.CorrelationId}")">@e.CorrelationId</a>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private KpiSummary? _kpis;
+    private IReadOnlyList<DenyBreakdownRow>? _denies;
+    private IReadOnlyList<AuditEventRow>? _recent;
+    private string? _loadError;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(LoadAsync);
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var window = TimeSpan.FromHours(24);
+            _kpis    = await Audit.GetKpisAsync(window, default);
+            _denies  = await Audit.GetDenyBreakdownAsync(window, default);
+            _recent  = await Audit.GetRecentEventsAsync(100, window, default);
+            _loadError = null;
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+    }
+
+    private static RenderFragment KpiCard(string title, long value, string color) => builder =>
+    {
+        builder.AddMarkupContent(0, $@"
+            <div class='col-md-2 col-6'>
+                <div class='card text-bg-{color} h-100'>
+                    <div class='card-body'>
+                        <div class='small text-uppercase'>{title}</div>
+                        <div class='display-6'>{value}</div>
+                    </div>
+                </div>
+            </div>");
+    };
+
+    public void Dispose() => _timer?.Dispose();
+}

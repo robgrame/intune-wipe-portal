@@ -1,0 +1,82 @@
+@page "/audit/{CorrelationId?}"
+@rendermode InteractiveServer
+@inject AuditQueryService AuditSvc
+@inject NavigationManager Nav
+
+<PageTitle>Audit trail</PageTitle>
+
+<h1 class="mb-3">Audit trail</h1>
+
+<form class="mb-3" @onsubmit="Search">
+    <div class="input-group">
+        <span class="input-group-text">Correlation ID</span>
+        <input class="form-control" @bind="_query" placeholder="8-64 chars (letters / digits / dash)" />
+        <button class="btn btn-primary" type="submit">Cerca</button>
+    </div>
+</form>
+
+@if (!string.IsNullOrWhiteSpace(CorrelationId))
+{
+    <h2 class="h5">Trail per <code>@CorrelationId</code></h2>
+
+    @if (_loading) { <p><em>Loading...</em></p> }
+    else if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+    else if (_events is null || _events.Count == 0) { <p class="text-muted">Nessun evento trovato.</p> }
+    else
+    {
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Timestamp (UTC)</th>
+                    <th>Evento</th>
+                    <th>Device</th>
+                    <th>Intune ID</th>
+                    <th>Entra ID</th>
+                    <th>Reason / Exception</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var e in _events)
+            {
+                <tr>
+                    <td>@e.Timestamp.UtcDateTime.ToString("u")</td>
+                    <td><code>@e.EventName</code></td>
+                    <td>@(e.DeviceName ?? "-")</td>
+                    <td>@(e.IntuneDeviceId ?? "-")</td>
+                    <td>@(e.EntraDeviceId ?? "-")</td>
+                    <td>@(e.Reason ?? e.ExceptionType ?? "-")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter] public string? CorrelationId { get; set; }
+
+    private string _query = string.Empty;
+    private bool _loading;
+    private string? _error;
+    private IReadOnlyList<AuditEventRow>? _events;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CorrelationId)) { _events = null; return; }
+        _query = CorrelationId;
+        _loading = true;
+        _error = null;
+        try
+        {
+            _events = await AuditSvc.GetTrailAsync(CorrelationId, default);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void Search()
+    {
+        if (!string.IsNullOrWhiteSpace(_query))
+            Nav.NavigateTo($"/audit/{_query.Trim()}");
+    }
+}

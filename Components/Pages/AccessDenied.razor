@@ -1,0 +1,25 @@
+@page "/access-denied"
+@layout MainLayout
+@using IntuneWipePortal = intune_wipe_portal
+@using Layout = intune_wipe_portal.Components.Layout
+
+@* Public page: the access-denied redirect target configured via
+   ConfigureApplicationCookie. Reached when the user IS authenticated
+   but does not hold the required role policy. *@
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Accesso negato</PageTitle>
+
+<div class="container py-5">
+    <h1 class="h3 text-danger">Accesso negato</h1>
+    <p>
+        Il tuo account è stato autenticato ma non ha uno dei ruoli applicativi
+        richiesti (<code>Wipe.Observer</code> oppure <code>Wipe.Auditor</code>)
+        sulla app registration <em>Intune Wipe Portal</em>.
+    </p>
+    <p>
+        Contatta l'amministratore del tenant per richiedere l'assegnazione.
+    </p>
+    <a class="btn btn-outline-secondary"
+       href="MicrosoftIdentity/Account/SignOut">Esci</a>
+</div>

@@ -1,0 +1,54 @@
+@* Renders a friendly message while OIDC redirects for sign-in, or an
+   "access denied" page when the user is signed in but lacks the required
+   app role. *@
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Authorization
+
+<AuthorizeView>
+    <Authorized>
+        @* Authenticated but missing role — show access denied. *@
+        <div class="container py-5">
+            <h1 class="h3 text-danger">Accesso negato</h1>
+            <p>
+                Il tuo account <strong>@context.User.Identity?.Name</strong> non
+                ha uno dei ruoli applicativi richiesti
+                (<code>Wipe.Observer</code> oppure <code>Wipe.Auditor</code>).
+            </p>
+            <p>
+                Contatta l'amministratore della <em>Intune Wipe Portal</em>
+                app registration per richiedere l'assegnazione del ruolo.
+            </p>
+            <a class="btn btn-outline-secondary"
+               href="MicrosoftIdentity/Account/SignOut">Esci</a>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <p><em>Reindirizzamento al sign-in...</em></p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool _redirected;
+
+    // Trigger the OIDC challenge from a lifecycle method, not from render.
+    // Doing it inside the NotAuthorized fragment caused a render-time side
+    // effect that could re-fire on each render pass.
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _redirected) return;
+
+        // We only want to redirect when the user is NOT signed in. If they
+        // are signed in but lack the role, the Authorized branch above is
+        // shown and we must NOT navigate away.
+        // The simplest reliable check at this point: if the absolute URI
+        // already targets the sign-in controller, do nothing.
+        if (Nav.Uri.Contains("/MicrosoftIdentity/Account/", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _redirected = true;
+        var relative = "/" + Nav.ToBaseRelativePath(Nav.Uri);
+        Nav.NavigateTo(
+            $"MicrosoftIdentity/Account/SignIn?redirectUri={Uri.EscapeDataString(relative)}",
+            forceLoad: true);
+    }
+}

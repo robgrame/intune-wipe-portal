@@ -1,0 +1,214 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "2895287027750369124"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "intwipe",
+      "minLength": 3,
+      "maxLength": 12
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the existing Log Analytics workspace that hosts the wipe customEvents (created by intune-wipe-api)."
+      }
+    },
+    "entraTenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Entra ID tenant id for OIDC sign-in."
+      }
+    },
+    "entraClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "App Registration ClientId for the portal (created by infra/entra/create-app-registration.ps1)."
+      }
+    },
+    "entraDomain": {
+      "type": "string",
+      "metadata": {
+        "description": "Verified domain of the tenant, e.g. contoso.onmicrosoft.com."
+      }
+    },
+    "entraClientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Client secret for the portal app registration. Pass via Key Vault reference in production, e.g. @Microsoft.KeyVault(SecretUri=...)."
+      }
+    },
+    "appServicePlanSku": {
+      "type": "string",
+      "defaultValue": "B1",
+      "allowedValues": [
+        "B1",
+        "B2",
+        "P0v3",
+        "P1v3"
+      ],
+      "metadata": {
+        "description": "App Service Plan SKU. B1 for dev; P0v3 or P1v3 for prod."
+      }
+    },
+    "httpsOnly": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run with HTTPS-only enforcement."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "planName": "[toLower(format('{0}-plan-portal-{1}', parameters('namePrefix'), variables('suffix')))]",
+    "webAppName": "[toLower(format('{0}-portal-{1}', parameters('namePrefix'), variables('suffix')))]",
+    "uamiName": "[toLower(format('{0}-uami-portal-{1}', parameters('namePrefix'), variables('suffix')))]",
+    "roleLogAnalyticsReader": "73c42c96-874c-492b-b04d-ab87d138a893"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('uamiName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+      "name": "[guid(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), variables('roleLogAnalyticsReader'))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleLogAnalyticsReader'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('planName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('appServicePlanSku')]"
+      },
+      "kind": "linux",
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('webAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')))]": {}
+        }
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "httpsOnly": "[parameters('httpsOnly')]",
+        "keyVaultReferenceIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]",
+        "siteConfig": {
+          "linuxFxVersion": "DOTNETCORE|10.0",
+          "minTlsVersion": "1.2",
+          "http20Enabled": true,
+          "ftpsState": "Disabled",
+          "alwaysOn": "[not(equals(parameters('appServicePlanSku'), 'B1'))]",
+          "use32BitWorkerProcess": false,
+          "appSettings": [
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').clientId]"
+            },
+            {
+              "name": "Monitor__WorkspaceId",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').customerId]"
+            },
+            {
+              "name": "AzureAd__Instance",
+              "value": "https://login.microsoftonline.com/"
+            },
+            {
+              "name": "AzureAd__Domain",
+              "value": "[parameters('entraDomain')]"
+            },
+            {
+              "name": "AzureAd__TenantId",
+              "value": "[parameters('entraTenantId')]"
+            },
+            {
+              "name": "AzureAd__ClientId",
+              "value": "[parameters('entraClientId')]"
+            },
+            {
+              "name": "AzureAd__ClientSecret",
+              "value": "[parameters('entraClientSecret')]"
+            },
+            {
+              "name": "AzureAd__CallbackPath",
+              "value": "/signin-oidc"
+            },
+            {
+              "name": "AzureAd__SignedOutCallbackPath",
+              "value": "/signout-callback-oidc"
+            },
+            {
+              "name": "ASPNETCORE_FORWARDEDHEADERS_ENABLED",
+              "value": "true"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "webAppName": {
+      "type": "string",
+      "value": "[variables('webAppName')]"
+    },
+    "webAppHostname": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', variables('webAppName')), '2023-12-01').defaultHostName]"
+    },
+    "uamiClientId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').clientId]"
+    },
+    "uamiPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]"
+    },
+    "workspaceCustomerId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').customerId]"
+    }
+  }
+}
