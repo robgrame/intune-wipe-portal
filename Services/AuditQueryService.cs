@@ -57,8 +57,11 @@ public sealed class AuditQueryService
     public async Task<KpiSummary> GetKpisAsync(TimeSpan window, ActionCapability capability, CancellationToken ct)
     {
         var actionTypeFilter = capability.ActionTypeValue();
+        // Use a `| where true` no-op when no capability filter is applied so
+        // the KQL line layout stays stable (avoids whitespace-only lines that
+        // can confuse error reporting and produce hard-to-read parse errors).
         var actionTypeClause = actionTypeFilter is null
-            ? ""
+            ? "| where true"
             : $"| where tostring(Properties.actionType) == \"{actionTypeFilter}\"";
 
         // action.* counters (capability filter via actionType property).
@@ -131,7 +134,7 @@ public sealed class AuditQueryService
     {
         var actionTypeFilter = capability.ActionTypeValue();
         var actionTypeClause = actionTypeFilter is null
-            ? ""
+            ? "| where true"
             : $"| where tostring(Properties.actionType) == \"{actionTypeFilter}\"";
 
         var query = $$"""
@@ -153,7 +156,7 @@ public sealed class AuditQueryService
         var prefixListKql = BuildPrefixOrClause(capability);
         var actionTypeFilter = capability.ActionTypeValue();
         var actionTypeClause = actionTypeFilter is null
-            ? ""
+            ? "| where true"
             // Restrict only the action.* slice; capability prefix already
             // implies the capability for non-action.* events.
             : $"| where not(Name startswith \"action.\") or tostring(Properties.actionType) == \"{actionTypeFilter}\"";
@@ -229,9 +232,15 @@ public sealed class AuditQueryService
 
         var actionTypeFilter = capability.ActionTypeValue();
         var terminalFilter = actionTypeFilter is null
-            ? ""
+            ? "| where true"
             : $"| where tostring(Properties.actionType) == \"{actionTypeFilter}\"";
 
+        // Note: identifier 'latest' is reserved in some KQL contexts; we use
+        // 'lastSeen' to avoid the parser tripping. The state projection uses
+        // arg_max(timestamp, col) which already returns the column's value at
+        // the row with the max timestamp — no '.state' suffix needed (that
+        // suffix was a syntax error: arg_max returns a scalar, not a packed
+        // dynamic, when given a single column).
         var query = $$"""
             let win = ago({{ToKql(window)}});
             let issued =
@@ -252,18 +261,17 @@ public sealed class AuditQueryService
                 {{terminalFilter}}
                 | extend corr = tostring(Properties.correlationId)
                 | distinct corr;
-            let latest =
+            let lastSeen =
                 AppEvents
                 | where TimeGenerated > win
                 | where Name == "{{ActionStateChanged}}" or Name startswith "action.state-"
                 | extend corr  = tostring(Properties.correlationId),
                          state = tostring(Properties.currentState)
-                | summarize LastUpdate = max(TimeGenerated),
-                            CurrentState = arg_max(TimeGenerated, state).state
+                | summarize (LastUpdate, CurrentState) = arg_max(TimeGenerated, state)
                             by corr;
             issued
             | where corr !in (terminal)
-            | join kind=leftouter (latest) on corr
+            | join kind=leftouter (lastSeen) on corr
             | extend CurrentState = coalesce(CurrentState, "pending"),
                      LastUpdate   = coalesce(LastUpdate, IssuedAt)
             | extend MinutesSinceIssued = toint((now() - IssuedAt) / 1m)

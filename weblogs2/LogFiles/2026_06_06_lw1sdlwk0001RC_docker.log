@@ -1,0 +1,103 @@
+2026-06-06T20:54:55.0227698Z State: Starting, Action: EstablishingSiteNetworks, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T20:54:59.2331987Z State: Starting, Action: StartingMsiContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T20:55:17.7052173Z State: Starting, Action: StartingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T20:55:17.7068220Z Container start method called.
+2026-06-06T20:55:17.7139063Z State: Starting, Action: PullingImage, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pulling image 10.1.0.4:13209/appsvc/dotnetcore:10.0_20260504.4.tuxprod for idactions-portal., DetailsLevel: INFO
+2026-06-06T20:55:17.7141676Z Establishing network.
+2026-06-06T20:55:17.7143058Z Pulling image: appsvc/dotnetcore:10.0_20260504.4.tuxprod.
+2026-06-06T20:56:21.4875346Z Image appsvc/dotnetcore:10.0_20260504.4.tuxprod is pulled from registry 10.1.0.4:13209
+2026-06-06T20:56:21.4961436Z Container is starting.
+2026-06-06T20:56:21.5136082Z State: Starting, Action: MountingVolumes, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Mounting volumes for idactions-portal., DetailsLevel: INFO
+2026-06-06T20:56:21.5149349Z Establishing user namespace if not established already.
+2026-06-06T20:56:21.5155247Z Establishing network if not established already.
+2026-06-06T20:56:21.5162583Z Mounting volumes.
+2026-06-06T20:56:21.5259980Z Nested mountpoint site/wwwroot
+2026-06-06T20:56:21.5884771Z Nested mountpoint volatile/logs
+2026-06-06T20:56:21.6155511Z Nested mountpoint 
+2026-06-06T20:56:21.7227764Z Nested mountpoint 
+2026-06-06T20:56:21.7907954Z Nested mountpoint 
+2026-06-06T20:56:21.8007083Z Nested mountpoint 
+2026-06-06T20:56:23.4220479Z State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Finished pulling container image and mounting volumes for idactions-portal. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-06-06T20:56:23.4303224Z Creating container.
+2026-06-06T20:56:23.4311205Z Creating pipes for streaming container io.
+2026-06-06T20:56:23.4318639Z Creating stdout named pipe at /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4396811Z Successfully created stdout named pipe at: /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4415096Z Opening named pipe /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97 for reading in non-blocking mode.
+2026-06-06T20:56:23.4491981Z Successfully opened named pipe: /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4497410Z Successfully removed non-blocking flag from /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4509111Z Creating stderr named pipe at /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4591459Z Successfully created stderr named pipe at: /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4598325Z Opening named pipe /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd for reading in non-blocking mode.
+2026-06-06T20:56:23.4604818Z Successfully opened named pipe: /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4682329Z Successfully removed non-blocking flag from /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4699654Z Creating container with image: appsvc/dotnetcore:10.0_20260504.4.tuxprod from registry: 10.1.0.4:13209 and fully qualified image name: 10.1.0.4:13209/appsvc/dotnetcore:10.0_20260504.4.tuxprod
+2026-06-06T20:56:24.0519409Z Starting container: 7d33d0ebc373_idactions-portal.
+2026-06-06T20:56:24.2127140Z Starting watchers and probes.
+2026-06-06T20:56:24.2227503Z Starting metrics collection.
+2026-06-06T20:56:24.2235923Z Container is running.
+2026-06-06T20:56:24.2244223Z State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container idactions-portal successfully created and is running., DetailsLevel: INFO
+2026-06-06T20:56:24.6147172Z Container start method finished after 66907 ms.
+2026-06-06T20:56:24.6240992Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container idactions-portal successfully created and is running., DetailsLevel: INFO
+2026-06-06T20:56:24.7902045Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-06-06T20:57:10.6258369Z Site startup probe succeeded after 45.7473017 seconds.
+2026-06-06T20:57:10.9724627Z State: Starting, Action: WarmUpProbeSucceeded, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site startup probe succeeded after 45.7473017 seconds., DetailsLevel: INFO
+2026-06-06T20:57:11.8848034Z Site is running with deployment version: fc196849-68fa-4f3b-ae3b-2b90bae00a79
+2026-06-06T20:57:11.8864732Z Site started.
+2026-06-06T20:57:11.8872261Z State: Started, Action: None, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 20:57:11 (UTC), DetailsLevel: INFO
+2026-06-06T20:57:12.1173413Z Site is running with patch version DOTNETCORE 10.0.7
+2026-06-06T21:09:38.1889361Z State: Starting, Action: EstablishingSiteNetworks, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T21:09:41.9611421Z State: Starting, Action: StartingMsiContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T21:09:53.4915151Z State: Starting, Action: StartingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T21:09:53.4920773Z Container start method called.
+2026-06-06T21:09:53.4926698Z State: Starting, Action: PullingImage, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pulling image 10.1.0.5:13209/appsvc/dotnetcore:10.0_20260504.4.tuxprod for idactions-portal., DetailsLevel: INFO
+2026-06-06T21:09:53.4928120Z Establishing network.
+2026-06-06T21:09:53.4932142Z Pulling image: appsvc/dotnetcore:10.0_20260504.4.tuxprod.
+2026-06-06T21:09:53.7127142Z Image appsvc/dotnetcore:10.0_20260504.4.tuxprod is pulled from registry 10.1.0.5:13209
+2026-06-06T21:09:53.7128226Z Container is starting.
+2026-06-06T21:09:53.7129127Z State: Starting, Action: MountingVolumes, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Mounting volumes for idactions-portal., DetailsLevel: INFO
+2026-06-06T21:09:53.7129966Z Establishing user namespace if not established already.
+2026-06-06T21:09:53.7209901Z Establishing network if not established already.
+2026-06-06T21:09:53.7216656Z Mounting volumes.
+2026-06-06T21:09:53.7228874Z Nested mountpoint site/wwwroot
+2026-06-06T21:09:53.7895967Z Nested mountpoint volatile/logs
+2026-06-06T21:09:53.8075118Z Nested mountpoint 
+2026-06-06T21:09:53.9059979Z Nested mountpoint 
+2026-06-06T21:09:53.9269045Z Nested mountpoint 
+2026-06-06T21:09:53.9463444Z Nested mountpoint 
+2026-06-06T21:09:55.3206025Z State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Finished pulling container image and mounting volumes for idactions-portal. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-06-06T21:09:55.3209160Z Creating container.
+2026-06-06T21:09:55.3210100Z Creating pipes for streaming container io.
+2026-06-06T21:09:55.3654958Z Creating stdout named pipe at /podr/container/pipe/f01c55cc9708_idactions-portal/stdout_a6aa37efedb544c89f90e05865f2ecd4.
+2026-06-06T21:09:55.3662101Z Successfully created stdout named pipe at: /podr/container/pipe/f01c55cc9708_idactions-portal/stdout_a6aa37efedb544c89f90e05865f2ecd4.
+2026-06-06T21:09:55.3667007Z Opening named pipe /podr/container/pipe/f01c55cc9708_idactions-portal/stdout_a6aa37efedb544c89f90e05865f2ecd4 for reading in non-blocking mode.
+2026-06-06T21:09:55.3668624Z Successfully opened named pipe: /podr/container/pipe/f01c55cc9708_idactions-portal/stdout_a6aa37efedb544c89f90e05865f2ecd4.
+2026-06-06T21:09:55.3669994Z Successfully removed non-blocking flag from /podr/container/pipe/f01c55cc9708_idactions-portal/stdout_a6aa37efedb544c89f90e05865f2ecd4.
+2026-06-06T21:09:55.4106923Z Creating stderr named pipe at /podr/container/pipe/f01c55cc9708_idactions-portal/stderr_5d8f3dd47cf1493a8c96f4a143d96335.
+2026-06-06T21:09:55.4108966Z Successfully created stderr named pipe at: /podr/container/pipe/f01c55cc9708_idactions-portal/stderr_5d8f3dd47cf1493a8c96f4a143d96335.
+2026-06-06T21:09:55.4109737Z Opening named pipe /podr/container/pipe/f01c55cc9708_idactions-portal/stderr_5d8f3dd47cf1493a8c96f4a143d96335 for reading in non-blocking mode.
+2026-06-06T21:09:55.4110606Z Successfully opened named pipe: /podr/container/pipe/f01c55cc9708_idactions-portal/stderr_5d8f3dd47cf1493a8c96f4a143d96335.
+2026-06-06T21:09:55.4111352Z Successfully removed non-blocking flag from /podr/container/pipe/f01c55cc9708_idactions-portal/stderr_5d8f3dd47cf1493a8c96f4a143d96335.
+2026-06-06T21:09:55.4129780Z Creating container with image: appsvc/dotnetcore:10.0_20260504.4.tuxprod from registry: 10.1.0.5:13209 and fully qualified image name: 10.1.0.5:13209/appsvc/dotnetcore:10.0_20260504.4.tuxprod
+2026-06-06T21:09:56.0259185Z Starting container: f01c55cc9708_idactions-portal.
+2026-06-06T21:09:56.1253485Z Starting watchers and probes.
+2026-06-06T21:09:56.1347647Z Starting metrics collection.
+2026-06-06T21:09:56.1353701Z Container is running.
+2026-06-06T21:09:56.1431331Z State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container idactions-portal successfully created and is running., DetailsLevel: INFO
+2026-06-06T21:09:56.3980167Z Container start method finished after 2905 ms.
+2026-06-06T21:09:56.3988386Z State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container idactions-portal successfully created and is running., DetailsLevel: INFO
+2026-06-06T21:09:56.3989264Z State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-06-06T21:10:42.3272774Z Site startup probe succeeded after 45.8913016 seconds.
+2026-06-06T21:10:42.5603693Z State: Starting, Action: WarmUpProbeSucceeded, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site startup probe succeeded after 45.8913016 seconds., DetailsLevel: INFO
+2026-06-06T21:10:43.5773282Z Site is running with deployment version: f8699b9e-301b-4dec-bd6c-7c77e28f9517
+2026-06-06T21:10:43.5868662Z Site started.
+2026-06-06T21:10:43.5883838Z State: Started, Action: None, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 21:10:43 (UTC), DetailsLevel: INFO
+2026-06-06T21:10:43.6099811Z Site is running with patch version DOTNETCORE 10.0.7
+2026-06-06T21:11:03.9038556Z State: Stopping, Action: StoppingSite, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 20:57:11 (UTC), DetailsLevel: INFO
+2026-06-06T21:11:03.9321083Z State: Stopping, Action: StoppingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 20:57:11 (UTC), DetailsLevel: INFO
+2026-06-06T21:11:03.9512165Z Container is terminating. Grace period: 5 seconds.
+2026-06-06T21:11:04.0269375Z Stop and delete container. Retry count = 0
+2026-06-06T21:11:04.0292670Z Stopping container: 7d33d0ebc373_idactions-portal.
+2026-06-06T21:11:09.3389459Z Deleting container: 7d33d0ebc373_idactions-portal. Retry count = 0
+2026-06-06T21:11:09.6949682Z Container spec TerminationMessagePolicy  path 
+2026-06-06T21:11:09.7134854Z Container is terminated. Total time elapsed: 5755 ms.
+2026-06-06T21:11:10.2933438Z Site: idactions-portal stopped.

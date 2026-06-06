@@ -1,0 +1,9 @@
+2026-06-06T21:11:03.9038556Z State: Stopping, Action: StoppingSite, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 20:57:11 (UTC), DetailsLevel: INFO
+2026-06-06T21:11:03.9321083Z State: Stopping, Action: StoppingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 20:57:11 (UTC), DetailsLevel: INFO
+2026-06-06T21:11:03.9512165Z Container is terminating. Grace period: 5 seconds.
+2026-06-06T21:11:04.0269375Z Stop and delete container. Retry count = 0
+2026-06-06T21:11:04.0292670Z Stopping container: 7d33d0ebc373_idactions-portal.
+2026-06-06T21:11:09.3389459Z Deleting container: 7d33d0ebc373_idactions-portal. Retry count = 0
+2026-06-06T21:11:09.6949682Z Container spec TerminationMessagePolicy  path 
+2026-06-06T21:11:09.7134854Z Container is terminated. Total time elapsed: 5755 ms.
+2026-06-06T21:11:10.2933438Z Site: idactions-portal stopped.

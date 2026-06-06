@@ -1,0 +1,60 @@
+2026-06-06T21:04:18.6803451Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:18.6803854Z       Microsoft.IdentityModel Version: 8.18.0.0. Date 06/06/2026 21:04:18. PII logging is OFF. See https://aka.ms/IdentityModel/PII for details. 
+2026-06-06T21:04:18.6803883Z       IDX10242: Security token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]' has a valid signature.
+2026-06-06T21:04:18.6992152Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:18.6992730Z       IDX10239: Lifetime of the token is valid.
+2026-06-06T21:04:18.7107787Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:18.7108363Z       IDX10234: Audience Validated.Audience: 'd40d7adc-9ac1-4256-b896-4459ee315ce5'
+2026-06-06T21:04:20.1157438Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:20.1161730Z       IDX10245: Creating claims identity from the validated token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'.
+2026-06-06T21:04:20.1718303Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:20.1718965Z       IDX21305: OpenIdConnectProtocolValidationContext.ProtocolMessage.Code is null, there is no 'code' in the OpenIdConnect Response to validate.
+2026-06-06T21:04:20.1821056Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:20.1825538Z       IDX21310: OpenIdConnectProtocolValidationContext.ProtocolMessage.AccessToken is null, there is no 'token' in the OpenIdConnect Response to validate.
+2026-06-06T21:04:57.4319622Z warn: Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectHandler[15]
+2026-06-06T21:04:57.4320291Z       '.AspNetCore.Correlation.8Jic_IMIMljJKqt8tF6INpSMm_uvmvEiqVAFZNr9DmQ' cookie not found.
+2026-06-06T21:04:57.6120715Z fail: Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware[1]
+2026-06-06T21:04:57.6121335Z       An unhandled exception has occurred while executing the request.
+2026-06-06T21:04:57.6129855Z       Microsoft.AspNetCore.Authentication.AuthenticationFailureException: An error was encountered while handling the remote login.
+2026-06-06T21:04:57.6129992Z        ---> Microsoft.AspNetCore.Authentication.AuthenticationFailureException: Correlation failed.
+2026-06-06T21:04:57.6130017Z          --- End of inner exception stack trace ---
+2026-06-06T21:04:57.6294106Z          at Microsoft.AspNetCore.Authentication.RemoteAuthenticationHandler`1.HandleRequestAsync()
+2026-06-06T21:04:57.6294565Z          at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+2026-06-06T21:04:57.6294670Z          at Microsoft.AspNetCore.Diagnostics.StatusCodePagesMiddleware.Invoke(HttpContext context)
+2026-06-06T21:04:57.6294695Z          at Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddlewareImpl.<Invoke>g__Awaited|10_0(ExceptionHandlerMiddlewareImpl middleware, HttpContext context, Task task)
+2026-06-06T21:04:58.5347750Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:58.5348242Z       IDX10242: Security token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]' has a valid signature.
+2026-06-06T21:04:58.5364547Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:58.5364726Z       IDX10239: Lifetime of the token is valid.
+2026-06-06T21:04:58.5364748Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:58.5364766Z       IDX10234: Audience Validated.Audience: 'd40d7adc-9ac1-4256-b896-4459ee315ce5'
+2026-06-06T21:04:58.5368369Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:58.5455923Z       IDX10245: Creating claims identity from the validated token: '[PII of type 'Microsoft.IdentityModel.JsonWebTokens.JsonWebToken' is hidden. For more details, see https://aka.ms/IdentityModel/PII.]'.
+2026-06-06T21:04:58.5456146Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:58.5456172Z       IDX21305: OpenIdConnectProtocolValidationContext.ProtocolMessage.Code is null, there is no 'code' in the OpenIdConnect Response to validate.
+2026-06-06T21:04:58.5456190Z info: Microsoft.IdentityModel.LoggingExtensions.IdentityLoggerAdapter[0]
+2026-06-06T21:04:58.5456216Z       IDX21310: OpenIdConnectProtocolValidationContext.ProtocolMessage.AccessToken is null, there is no 'token' in the OpenIdConnect Response to validate.
+2026-06-06T21:05:12.6532013Z fail: IntuneWipePortal.Services.AuditQueryService[0]
+2026-06-06T21:05:12.6532495Z       KQL query failed (window=1.00:00:00)
+2026-06-06T21:05:12.6532519Z       Azure.RequestFailedException: The request had some invalid properties
+2026-06-06T21:05:12.6532537Z       Status: 400 (Bad Request)
+2026-06-06T21:05:12.6532622Z       ErrorCode: BadArgumentError
+2026-06-06T21:05:12.6532637Z       
+2026-06-06T21:05:12.6532652Z       Content:
+2026-06-06T21:05:12.6532760Z       {"error":{"message":"The request had some invalid properties","code":"BadArgumentError","correlationId":"e38291a7-402b-4e07-abb2-45018ecd161f","innererror":{"code":"SyntaxError","message":"A recognition error occurred in the query.","innererror":{"code":"SYN0002","message":"Query could not be parsed at 'latest' on line [20,5]","line":20,"pos":5,"token":"latest"}}}}
+2026-06-06T21:05:12.6532775Z       
+2026-06-06T21:05:12.6532790Z       Headers:
+2026-06-06T21:05:12.6532806Z       Date: Sat, 06 Jun 2026 21:05:12 GMT
+2026-06-06T21:05:12.6532821Z       Connection: keep-alive
+2026-06-06T21:05:12.6532838Z       Via: REDACTED
+2026-06-06T21:05:12.6532855Z       X-Content-Type-Options: REDACTED
+2026-06-06T21:05:12.6532893Z       x-ms-request-id: e38291a7-402b-4e07-abb2-45018ecd161f
+2026-06-06T21:05:12.6532910Z       Access-Control-Allow-Origin: REDACTED
+2026-06-06T21:05:12.6532926Z       Access-Control-Expose-Headers: REDACTED
+2026-06-06T21:05:12.6533087Z       Strict-Transport-Security: REDACTED
+2026-06-06T21:05:12.6533105Z       Content-Type: application/json; charset=utf-8
+2026-06-06T21:05:12.6533121Z       Content-Length: 367
+2026-06-06T21:05:12.6533136Z       
+2026-06-06T21:05:12.6533158Z          at Azure.Monitor.Query.LogsQueryClient.ExecuteAsync(String id, String query, QueryTimeRange timeRange, LogsQueryOptions options, Boolean async, Boolean isWorkspace, CancellationToken cancellationToken)
+2026-06-06T21:05:12.6533180Z          at Azure.Monitor.Query.LogsQueryClient.QueryWorkspaceAsync(String workspaceId, String query, QueryTimeRange timeRange, LogsQueryOptions options, CancellationToken cancellationToken)
+2026-06-06T21:05:12.6533222Z          at IntuneWipePortal.Services.AuditQueryService.ExecuteAsync[T](String query, TimeSpan window, CancellationToken ct, Func`2 map) in C:\Users\robgrame\source\repos\intune-wipe-portal\Services\AuditQueryService.cs:line 322

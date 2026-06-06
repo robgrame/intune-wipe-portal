@@ -1,0 +1,96 @@
+2026-06-06T20:54:55.0227698+00:00 ContainerStatus: State: Starting, Action: EstablishingSiteNetworks, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T20:54:59.2331987+00:00 ContainerStatus: State: Starting, Action: StartingMsiContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T20:55:17.7052173+00:00 ContainerStatus: State: Starting, Action: StartingSiteContainers, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: , DetailsLevel: INFO
+2026-06-06T20:55:17.7068220+00:00 ContainerStatus: Container start method called.
+2026-06-06T20:55:17.7139063+00:00 ContainerStatus: State: Starting, Action: PullingImage, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pulling image 10.1.0.4:13209/appsvc/dotnetcore:10.0_20260504.4.tuxprod for idactions-portal., DetailsLevel: INFO
+2026-06-06T20:55:17.7141676+00:00 ContainerStatus: Establishing network.
+2026-06-06T20:55:17.7143058+00:00 ContainerStatus: Pulling image: appsvc/dotnetcore:10.0_20260504.4.tuxprod.
+2026-06-06T20:56:21.4875346+00:00 ContainerStatus: Image appsvc/dotnetcore:10.0_20260504.4.tuxprod is pulled from registry 10.1.0.4:13209
+2026-06-06T20:56:21.4961436+00:00 ContainerStatus: Container is starting.
+2026-06-06T20:56:21.5136082+00:00 ContainerStatus: State: Starting, Action: MountingVolumes, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Mounting volumes for idactions-portal., DetailsLevel: INFO
+2026-06-06T20:56:21.5149349+00:00 ContainerStatus: Establishing user namespace if not established already.
+2026-06-06T20:56:21.5155247+00:00 ContainerStatus: Establishing network if not established already.
+2026-06-06T20:56:21.5162583+00:00 ContainerStatus: Mounting volumes.
+2026-06-06T20:56:21.5259980+00:00 ContainerStatus: Nested mountpoint site/wwwroot
+2026-06-06T20:56:21.5884771+00:00 ContainerStatus: Nested mountpoint volatile/logs
+2026-06-06T20:56:21.6155511+00:00 ContainerStatus: Nested mountpoint 
+2026-06-06T20:56:21.7227764+00:00 ContainerStatus: Nested mountpoint 
+2026-06-06T20:56:21.7907954+00:00 ContainerStatus: Nested mountpoint 
+2026-06-06T20:56:21.8007083+00:00 ContainerStatus: Nested mountpoint 
+2026-06-06T20:56:23.4220479+00:00 ContainerStatus: State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Finished pulling container image and mounting volumes for idactions-portal. Allocatinng the rest of the container resources to finish container creation., DetailsLevel: INFO
+2026-06-06T20:56:23.4303224+00:00 ContainerStatus: Creating container.
+2026-06-06T20:56:23.4311205+00:00 ContainerStatus: Creating pipes for streaming container io.
+2026-06-06T20:56:23.4318639+00:00 ContainerStatus: Creating stdout named pipe at /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4396811+00:00 ContainerStatus: Successfully created stdout named pipe at: /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4415096+00:00 ContainerStatus: Opening named pipe /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97 for reading in non-blocking mode.
+2026-06-06T20:56:23.4491981+00:00 ContainerStatus: Successfully opened named pipe: /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4497410+00:00 ContainerStatus: Successfully removed non-blocking flag from /podr/container/pipe/7d33d0ebc373_idactions-portal/stdout_9cc8a553afba4525bdd9d1be4999ca97.
+2026-06-06T20:56:23.4509111+00:00 ContainerStatus: Creating stderr named pipe at /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4591459+00:00 ContainerStatus: Successfully created stderr named pipe at: /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4598325+00:00 ContainerStatus: Opening named pipe /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd for reading in non-blocking mode.
+2026-06-06T20:56:23.4604818+00:00 ContainerStatus: Successfully opened named pipe: /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4682329+00:00 ContainerStatus: Successfully removed non-blocking flag from /podr/container/pipe/7d33d0ebc373_idactions-portal/stderr_58c83b58cedb4ad4a37f15bcd01077cd.
+2026-06-06T20:56:23.4699654+00:00 ContainerStatus: Creating container with image: appsvc/dotnetcore:10.0_20260504.4.tuxprod from registry: 10.1.0.4:13209 and fully qualified image name: 10.1.0.4:13209/appsvc/dotnetcore:10.0_20260504.4.tuxprod
+2026-06-06T20:56:24.0519409+00:00 ContainerStatus: Starting container: 7d33d0ebc373_idactions-portal.
+2026-06-06T20:56:24.2127140+00:00 ContainerStatus: Starting watchers and probes.
+2026-06-06T20:56:24.2227503+00:00 ContainerStatus: Starting metrics collection.
+2026-06-06T20:56:24.2235923+00:00 ContainerStatus: Container is running.
+2026-06-06T20:56:24.2244223+00:00 ContainerStatus: State: Starting, Action: CreatingContainer, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container idactions-portal successfully created and is running., DetailsLevel: INFO
+2026-06-06T20:56:24.6147172+00:00 ContainerStatus: Container start method finished after 66907 ms.
+2026-06-06T20:56:24.6240992+00:00 ContainerStatus: State: Starting, Action: InitiatingSiteWarmUpProbe, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Container idactions-portal successfully created and is running., DetailsLevel: INFO
+2026-06-06T20:56:24.7283165+00:00 ContainerStream:    _____                               
+2026-06-06T20:56:24.7508114+00:00 ContainerStream:   /  _  \ __________ _________   ____  
+2026-06-06T20:56:24.7695806+00:00 ContainerStream:  /  /_\  \\___   /  |  \_  __ \_/ __ \ 
+2026-06-06T20:56:24.7696219+00:00 ContainerStream: /    |    \/    /|  |  /|  | \/\  ___/ 
+2026-06-06T20:56:24.7696266+00:00 ContainerStream: \____|__  /_____ \____/ |__|    \___  >
+2026-06-06T20:56:24.7696324+00:00 ContainerStream:         \/      \/                  \/ 
+2026-06-06T20:56:24.7696424+00:00 ContainerStream: A P P   S E R V I C E   O N   L I N U X
+2026-06-06T20:56:24.7696459+00:00 ContainerStream: 
+2026-06-06T20:56:24.7696516+00:00 ContainerStream: Documentation       : http://aka.ms/webapp-linux
+2026-06-06T20:56:24.7696574+00:00 ContainerStream: Dotnet quickstart   : https://aka.ms/dotnet-qs
+2026-06-06T20:56:24.7696616+00:00 ContainerStream: ASP .NETCore Version: 10.0.7
+2026-06-06T20:56:24.7696686+00:00 ContainerStream: Instance Name       : lw1sdlwk0001RC
+2026-06-06T20:56:24.7696944+00:00 ContainerStream: Instance Id         : adc94444450d2bb21c47720c325686638f6e364ce040ede52532fcc68cc80932
+2026-06-06T20:56:24.7696975+00:00 ContainerStream: 
+2026-06-06T20:56:24.7697030+00:00 ContainerStream: Note: Any data outside '/home' is not persisted
+2026-06-06T20:56:24.7902045+00:00 ContainerStatus: State: Starting, Action: WaitingForSiteWarmUpProbeSuccess, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Pinging warmup path to ensure container is ready to receive requests., DetailsLevel: INFO
+2026-06-06T20:56:29.0990301+00:00 ContainerStream:  * Starting OpenBSD Secure Shell server sshd
+2026-06-06T20:56:29.1505765+00:00 ContainerStream:    ...done.
+2026-06-06T20:56:29.1712550+00:00 ContainerStream: WEBSITES_INCLUDE_CLOUD_CERTS is not set to true.
+2026-06-06T20:56:29.2905024+00:00 ContainerStream: Updating certificates in /etc/ssl/certs...
+2026-06-06T20:56:50.3026028+00:00 ContainerStream: rehash: warning: skipping duplicate certificate in SSLcom-TLS-Root-2022-ECC.pem
+2026-06-06T20:56:50.3121448+00:00 ContainerStream: rehash: warning: skipping duplicate certificate in SSLcom-TLS-Root-2022-RSA.pem
+2026-06-06T20:56:50.8628651+00:00 ContainerStream: rehash: warning: skipping ca-certificates.crt,it does not contain exactly one certificate or CRL
+2026-06-06T20:56:50.9709917+00:00 ContainerStream: 4 added, 0 removed; done.
+2026-06-06T20:56:50.9710744+00:00 ContainerStream: Running hooks in /etc/ca-certificates/update.d...
+2026-06-06T20:56:50.9909242+00:00 ContainerStream: done.
+2026-06-06T20:56:51.0117985+00:00 ContainerStream: CA certificates copied and updated successfully.
+2026-06-06T20:56:51.2079137+00:00 ContainerStream:  * Starting periodic command scheduler cron
+2026-06-06T20:56:51.2502442+00:00 ContainerStream:    ...done.
+2026-06-06T20:56:51.2679217+00:00 ContainerStream: Running oryx create-script -appPath /home/site/wwwroot -output /opt/startup/startup.sh -defaultAppFilePath /defaulthome/hostingstart/hostingstart.dll     -bindPort 8080 -bindPort2 '' -userStartupCommand '' 
+2026-06-06T20:56:51.5368874+00:00 ContainerStream: Could not find build manifest file at '/home/site/wwwroot/oryx-manifest.toml'
+2026-06-06T20:56:51.5671241+00:00 ContainerStream: Could not find operation ID in manifest. Generating an operation id...
+2026-06-06T20:56:51.5671937+00:00 ContainerStream: Build Operation ID: c5e0890e-6142-41da-88c3-2460dcfea3e7
+2026-06-06T20:56:52.7627387+00:00 ContainerStream: 
+2026-06-06T20:56:52.7682907+00:00 ContainerStream: Agent extension 
+2026-06-06T20:56:52.7689743+00:00 ContainerStream: Before if loop >> DotNet Runtime 
+2026-06-06T20:56:52.8271462+00:00 ContainerStream: DotNet Runtime 10.0Writing output script to '/opt/startup/startup.sh'
+2026-06-06T20:56:52.9346110+00:00 ContainerStream: Trying to find the startup DLL name...
+2026-06-06T20:56:52.9355913+00:00 ContainerStream: Found the startup D name: intune-wipe-portal.dll
+2026-06-06T20:56:52.9446356+00:00 ContainerStream: Running the command: dotnet "intune-wipe-portal.dll"
+2026-06-06T20:56:58.6679895+00:00 ContainerStream: info: Microsoft.Hosting.Lifetime[14]
+2026-06-06T20:56:58.6680736+00:00 ContainerStream:       Now listening on: http://[::]:8080
+2026-06-06T20:56:58.6972444+00:00 ContainerStream: info: Microsoft.Hosting.Lifetime[0]
+2026-06-06T20:56:58.6973118+00:00 ContainerStream:       Application started. Press Ctrl+C to shut down.
+2026-06-06T20:56:58.7064314+00:00 ContainerStream: info: Microsoft.Hosting.Lifetime[0]
+2026-06-06T20:56:58.7065129+00:00 ContainerStream:       Hosting environment: Production
+2026-06-06T20:56:58.7181219+00:00 ContainerStream: info: Microsoft.Hosting.Lifetime[0]
+2026-06-06T20:56:58.7181834+00:00 ContainerStream:       Content root path: /home/site/wwwroot
+2026-06-06T20:56:59.2947131+00:00 ContainerStream: warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]
+2026-06-06T20:56:59.2947921+00:00 ContainerStream:       Failed to determine the https port for redirect.
+2026-06-06T20:57:10.6258369+00:00 ContainerStatus: Site startup probe succeeded after 45.7473017 seconds.
+2026-06-06T20:57:10.9724627+00:00 ContainerStatus: State: Starting, Action: WarmUpProbeSucceeded, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site startup probe succeeded after 45.7473017 seconds., DetailsLevel: INFO
+2026-06-06T20:57:11.8848034+00:00 ContainerStatus: Site is running with deployment version: fc196849-68fa-4f3b-ae3b-2b90bae00a79
+2026-06-06T20:57:11.8864732+00:00 ContainerStatus: Site started.
+2026-06-06T20:57:11.8872261+00:00 ContainerStatus: State: Started, Action: None, LastError: , LastErrorTimestamp: 01/01/0001 00:00:00, LastErrorDetails: , Details: Site started at 06/06/2026 20:57:11 (UTC), DetailsLevel: INFO
+2026-06-06T20:57:12.1173413+00:00 ContainerStatus: Site is running with patch version DOTNETCORE 10.0.7
