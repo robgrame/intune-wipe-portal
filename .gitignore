@@ -5,3 +5,5 @@ obj/
 appsettings.Development.json
 publish/
 publish.zip
+weblogs*/
+webapp-logs*.zip
