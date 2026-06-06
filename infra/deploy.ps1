@@ -56,6 +56,15 @@ param(
     [ValidateSet('B1','B2','P0v3','P1v3')]
     [string] $AppServicePlanSku = 'B1',
 
+    # Optional override for the per-resource suffix. Defaults to whatever
+    # uniqueString(resourceGroup().id) produces (= back-compat with the
+    # original deployment). Pass an empty string to deploy without any
+    # suffix at all (e.g. <prefix>-portal instead of <prefix>-portal-<sfx>).
+    # Must be lowercase alphanumeric.
+    [AllowEmptyString()]
+    [ValidatePattern('^[a-z0-9]*$')]
+    [string] $NameSuffix = $null,
+
     [string] $AssignUserUpn,
     [ValidateSet('Actions.Observer','Actions.Auditor')]
     [string] $AssignRole = 'Actions.Observer',
@@ -70,6 +79,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 Write-Host "==> Repo root: $root"
+
+# Track whether the caller explicitly passed -NameSuffix (even as an empty
+# string). When they did, we forward it to Bicep so the user can opt in to
+# the no-suffix layout; otherwise we omit the parameter and Bicep falls back
+# to uniqueString(resourceGroup().id) for back-compat.
+$script:NameSuffixOverridden = $PSBoundParameters.ContainsKey('NameSuffix')
 
 # --- Step 0: prerequisites -------------------------------------------------
 Write-Host "==> Verifying prerequisites..."
@@ -146,17 +161,26 @@ Write-Host "==> Deploying Bicep..."
 $secretPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($EntraClientSecret))
 
+$deployParams = @(
+    "namePrefix=$NamePrefix"
+    "logAnalyticsWorkspaceName=$LogAnalyticsWorkspaceName"
+    "entraTenantId=$EntraTenantId"
+    "entraClientId=$EntraClientId"
+    "entraDomain=$entraDomain"
+    "entraClientSecret=$secretPlain"
+    "appServicePlanSku=$AppServicePlanSku"
+)
+if ($script:NameSuffixOverridden) {
+    # Forward nameSuffix only when the caller explicitly passed -NameSuffix.
+    # Empty string is meaningful (= deploy without any suffix) so we forward
+    # it as-is; Bicep then disables the separator dash via empty(nameSuffix).
+    $deployParams += "nameSuffix=$NameSuffix"
+}
+
 $deployment = az deployment group create `
     --resource-group $ResourceGroup `
     --template-file (Join-Path $PSScriptRoot 'main.bicep') `
-    --parameters `
-        namePrefix=$NamePrefix `
-        logAnalyticsWorkspaceName=$LogAnalyticsWorkspaceName `
-        entraTenantId=$EntraTenantId `
-        entraClientId=$EntraClientId `
-        entraDomain=$entraDomain `
-        entraClientSecret=$secretPlain `
-        appServicePlanSku=$AppServicePlanSku `
+    --parameters @deployParams `
     -o json | ConvertFrom-Json
 
 $webAppName = $deployment.properties.outputs.webAppName.value

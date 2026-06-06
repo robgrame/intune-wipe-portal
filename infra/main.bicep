@@ -44,11 +44,16 @@ param appServicePlanSku string = 'B1'
 @description('Run with HTTPS-only enforcement.')
 param httpsOnly bool = true
 
+@description('Optional suffix appended to every resource name to keep them globally unique. Defaults to uniqueString(resourceGroup().id) for back-compat. Pass an empty string to deploy without any suffix (resource names will be e.g. <namePrefix>-portal). Must be lowercase alphanumeric.')
+@maxLength(13)
+param nameSuffix string = uniqueString(resourceGroup().id)
+
 // ---------------------------------------------------------------------------
-var suffix       = uniqueString(resourceGroup().id)
-var planName     = toLower('${namePrefix}-plan-portal-${suffix}')
-var webAppName   = toLower('${namePrefix}-portal-${suffix}')
-var uamiName     = toLower('${namePrefix}-uami-portal-${suffix}')
+var suffix       = nameSuffix
+var sep          = empty(suffix) ? '' : '-'
+var planName     = toLower('${namePrefix}-plan-portal${sep}${suffix}')
+var webAppName   = toLower('${namePrefix}-portal${sep}${suffix}')
+var uamiName     = toLower('${namePrefix}-uami-portal${sep}${suffix}')
 
 // Built-in role id for "Log Analytics Reader".
 var roleLogAnalyticsReader = '73c42c96-874c-492b-b04d-ab87d138a893'

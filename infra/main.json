@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "2895287027750369124"
+      "templateHash": "1084247451300751751"
     }
   },
   "parameters": {
@@ -22,7 +22,7 @@
     "logAnalyticsWorkspaceName": {
       "type": "string",
       "metadata": {
-        "description": "Name of the existing Log Analytics workspace that hosts the wipe customEvents (created by intune-wipe-api)."
+        "description": "Name of the existing Log Analytics workspace that hosts the device-actions audit events (created by intune-device-actions)."
       }
     },
     "entraTenantId": {
@@ -69,13 +69,22 @@
       "metadata": {
         "description": "Run with HTTPS-only enforcement."
       }
+    },
+    "nameSuffix": {
+      "type": "string",
+      "defaultValue": "[uniqueString(resourceGroup().id)]",
+      "maxLength": 13,
+      "metadata": {
+        "description": "Optional suffix appended to every resource name to keep them globally unique. Defaults to uniqueString(resourceGroup().id) for back-compat. Pass an empty string to deploy without any suffix (resource names will be e.g. <namePrefix>-portal). Must be lowercase alphanumeric."
+      }
     }
   },
   "variables": {
-    "suffix": "[uniqueString(resourceGroup().id)]",
-    "planName": "[toLower(format('{0}-plan-portal-{1}', parameters('namePrefix'), variables('suffix')))]",
-    "webAppName": "[toLower(format('{0}-portal-{1}', parameters('namePrefix'), variables('suffix')))]",
-    "uamiName": "[toLower(format('{0}-uami-portal-{1}', parameters('namePrefix'), variables('suffix')))]",
+    "suffix": "[parameters('nameSuffix')]",
+    "sep": "[if(empty(variables('suffix')), '', '-')]",
+    "planName": "[toLower(format('{0}-plan-portal{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix')))]",
+    "webAppName": "[toLower(format('{0}-portal{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix')))]",
+    "uamiName": "[toLower(format('{0}-uami-portal{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix')))]",
     "roleLogAnalyticsReader": "73c42c96-874c-492b-b04d-ab87d138a893"
   },
   "resources": [
