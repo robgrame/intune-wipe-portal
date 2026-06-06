@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-End-to-end deployment of the Intune Wipe Portal.
+End-to-end deployment of the Intune Device Actions Portal.
 
 .DESCRIPTION
 1. Verifies prerequisites (az login, dotnet, target RG).
@@ -28,7 +28,7 @@ The portal will be granted Log Analytics Reader on it.
 Optional. UPN of the user to assign to the portal app role on first run.
 
 .PARAMETER AssignRole
-Role to grant the user. Default: Wipe.Observer.
+Role to grant the user. Default: Actions.Observer.
 
 .PARAMETER SkipAppRegistration
 Skip step 2 (useful when the app reg already exists and TenantId/ClientId/Secret
@@ -57,8 +57,8 @@ param(
     [string] $AppServicePlanSku = 'B1',
 
     [string] $AssignUserUpn,
-    [ValidateSet('Wipe.Observer','Wipe.Auditor')]
-    [string] $AssignRole = 'Wipe.Observer',
+    [ValidateSet('Actions.Observer','Actions.Auditor')]
+    [string] $AssignRole = 'Actions.Observer',
 
     [switch] $SkipAppRegistration,
     [string] $EntraTenantId,

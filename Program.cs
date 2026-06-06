@@ -24,11 +24,20 @@ builder.Services.ConfigureApplicationCookie(o =>
 
 builder.Services.AddAuthorization(options =>
 {
-    // Either role grants read access; Auditor exists for future export features.
-    options.AddPolicy("CanRead", p => p.RequireRole("Wipe.Observer", "Wipe.Auditor"));
+    // Either role grants read access; Auditor exists for future export
+    // features. Old "Wipe.*" role names are kept in the list to support a
+    // single rolling token-refresh window after the rename — they can be
+    // removed once all users have re-signed-in and the app registration
+    // exposes only the new "Actions.*" roles.
+    var readRoles = new[]
+    {
+        "Actions.Observer", "Actions.Auditor",
+        "Wipe.Observer", "Wipe.Auditor", // legacy, transitional
+    };
+    options.AddPolicy("CanRead", p => p.RequireRole(readRoles));
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireRole("Wipe.Observer", "Wipe.Auditor")
+        .RequireRole(readRoles)
         .Build();
 });
 

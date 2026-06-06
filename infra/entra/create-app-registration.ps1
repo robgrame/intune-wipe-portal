@@ -1,47 +1,51 @@
 <#
 .SYNOPSIS
 Creates (or updates) the Entra ID App Registration that secures the
-Intune Wipe Portal, defines the Wipe.Observer / Wipe.Auditor app roles,
-and assigns a user (or group) to one of them.
+Intune Device Actions Portal, defines the Actions.Observer / Actions.Auditor
+app roles, and assigns a user (or group) to one of them.
 
 .DESCRIPTION
 The portal authenticates users with OpenID Connect (Microsoft.Identity.Web)
 and gates access through a fallback authorization policy that requires
 membership in either app role:
 
-    Wipe.Observer  -> read dashboards
-    Wipe.Auditor   -> read + audit-trail / export (future)
+    Actions.Observer  -> read dashboards
+    Actions.Auditor   -> read + audit-trail / export (future)
 
 Run this script once per environment (dev / prod). It is idempotent:
 re-runs update the existing app registration in place.
 
+NOTE: when migrating from the legacy Wipe.Observer / Wipe.Auditor roles,
+the app role GUIDs are preserved so existing assignments remain valid —
+only the claim value emitted in the user's token changes (next sign-in).
+
 .PARAMETER DisplayName
-Display name of the app registration. Default: "Intune Wipe Portal".
+Display name of the app registration. Default: "Intune Device Actions Portal".
 
 .PARAMETER ReplyUrl
 The HTTPS reply URL of the deployed Web App, e.g.
-  https://intwipe-portal-xyz.azurewebsites.net/signin-oidc
+  https://intactions-portal-xyz.azurewebsites.net/signin-oidc
 
 .PARAMETER AssignUserUpn
 (Optional) UPN of the user to assign to the role.
 
 .PARAMETER AssignRole
-Which role to assign. Default: Wipe.Observer.
+Which role to assign. Default: Actions.Observer.
 
 .EXAMPLE
 ./create-app-registration.ps1 `
-    -ReplyUrl https://intwipe-portal-xyz.azurewebsites.net/signin-oidc `
+    -ReplyUrl https://intactions-portal-xyz.azurewebsites.net/signin-oidc `
     -AssignUserUpn alice@contoso.com `
-    -AssignRole Wipe.Observer
+    -AssignRole Actions.Observer
 #>
 
 [CmdletBinding()]
 param(
-    [string] $DisplayName = "Intune Wipe Portal",
-    [Parameter(Mandatory)] [string] $WebAppHostname,  # e.g. intwipe-portal-xyz.azurewebsites.net
+    [string] $DisplayName = "Intune Device Actions Portal",
+    [Parameter(Mandatory)] [string] $WebAppHostname,  # e.g. intactions-portal-xyz.azurewebsites.net
     [string] $AssignUserUpn,
-    [ValidateSet("Wipe.Observer", "Wipe.Auditor")]
-    [string] $AssignRole = "Wipe.Observer",
+    [ValidateSet("Actions.Observer", "Actions.Auditor")]
+    [string] $AssignRole = "Actions.Observer",
     [switch] $CreateClientSecret,
     [switch] $RequireAssignment
 )
@@ -57,6 +61,21 @@ $signOutUrl = "https://$WebAppHostname/signout-callback-oidc"
 
 Write-Host "==> Looking up existing app registration '$DisplayName'..."
 $app = az ad app list --display-name $DisplayName --query "[0]" -o json | ConvertFrom-Json
+
+if (-not $app) {
+    # Migration: if the new name doesn't exist, look for the legacy name
+    # ("Intune Wipe Portal") and rename it in place so existing role
+    # assignments and client secrets are preserved.
+    $legacyName = "Intune Wipe Portal"
+    if ($DisplayName -ne $legacyName) {
+        Write-Host "==> Not found; checking for legacy '$legacyName' to rename..."
+        $app = az ad app list --display-name $legacyName --query "[0]" -o json | ConvertFrom-Json
+        if ($app) {
+            Write-Host "==> Found legacy app $($app.appId); renaming to '$DisplayName'..."
+            az ad app update --id $app.appId --display-name $DisplayName | Out-Null
+        }
+    }
+}
 
 if (-not $app) {
     Write-Host "==> Creating app registration..."

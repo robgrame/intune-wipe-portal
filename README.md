@@ -28,12 +28,20 @@ L'accesso è protetto da **Microsoft Entra ID** tramite OpenID Connect
 (`Microsoft.Identity.Web`). L'utente, dopo il sign-in, deve avere almeno uno
 dei seguenti **ruoli applicativi** definiti sulla App Registration:
 
-| Ruolo          | Descrizione                                                    |
-| -------------- | -------------------------------------------------------------- |
-| `Wipe.Observer`| Lettura dashboard e trail eventi                               |
-| `Wipe.Auditor` | Lettura + future capacità di export / audit-trail estesa       |
+| Ruolo               | Descrizione                                                |
+| ------------------- | ---------------------------------------------------------- |
+| `Actions.Observer`  | Lettura dashboard e trail eventi                           |
+| `Actions.Auditor`   | Lettura + future capacità di export / audit-trail estesa   |
 
 Gli utenti autenticati ma privi di ruolo vedono una pagina **Accesso negato**.
+
+> **Migrazione dai ruoli legacy `Wipe.Observer` / `Wipe.Auditor`**: i GUID
+> degli app role nel file `infra/entra/app-roles.json` sono invariati, quindi
+> rieseguire `create-app-registration.ps1` aggiorna il displayName e il claim
+> value emesso nei token **senza perdere le assegnazioni esistenti**. Il
+> portale accetta temporaneamente sia i nomi `Actions.*` che `Wipe.*` per
+> coprire la finestra di refresh dei token; i nomi legacy potranno essere
+> rimossi in un release successivo.
 
 ### Setup app registration
 
@@ -43,13 +51,14 @@ Esegui (una sola volta per tenant) lo script:
 ./infra/entra/create-app-registration.ps1 `
     -WebAppHostname <your-web-app>.azurewebsites.net `
     -AssignUserUpn alice@contoso.com `
-    -AssignRole Wipe.Observer `
+    -AssignRole Actions.Observer `
     -CreateClientSecret `
     -RequireAssignment
 ```
 
 Lo script:
-1. Crea (o aggiorna) la app registration `Intune Wipe Portal`.
+1. Crea (o aggiorna) la app registration `Intune Device Actions Portal`
+   (se trova una legacy `Intune Wipe Portal` la rinomina in place).
 2. Registra entrambi i reply URL: `/signin-oidc` e `/signout-callback-oidc`.
 3. Carica i due app role da `infra/entra/app-roles.json`.
 4. Crea il service principal; con `-RequireAssignment` blocca a livello tenant gli utenti non assegnati.

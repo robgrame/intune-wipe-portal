@@ -1,11 +1,12 @@
 targetScope = 'resourceGroup'
 
 // ---------------------------------------------------------------------------
-// Intune Wipe Portal — Bicep (App Service Linux + UAMI + RBAC on existing LAW)
+// Intune Device Actions Portal — Bicep (App Service Linux + UAMI + RBAC on existing LAW)
 //
-// Deploys a Blazor Server portal that reads structured wipe audit events from
-// the Log Analytics workspace already provisioned by the intune-wipe-api
-// deployment in the same resource group.
+// Deploys a Blazor Server portal that reads structured device-actions audit
+// events (wipe / autopilot-register / bitlocker-rotate) from the Log Analytics
+// workspace already provisioned by the intune-device-actions deployment in
+// the same resource group.
 //
 // The portal does NOT create a new LAW or App Insights — it queries the
 // existing one via a User-Assigned Managed Identity with the role
@@ -20,7 +21,7 @@ targetScope = 'resourceGroup'
 param namePrefix string = 'intwipe'
 param location string = resourceGroup().location
 
-@description('Name of the existing Log Analytics workspace that hosts the wipe customEvents (created by intune-wipe-api).')
+@description('Name of the existing Log Analytics workspace that hosts the device-actions audit events (created by intune-device-actions).')
 param logAnalyticsWorkspaceName string
 
 @description('Entra ID tenant id for OIDC sign-in.')
