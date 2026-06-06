@@ -90,13 +90,18 @@ if ($rgExists -ne 'true') {
     az group create --name $ResourceGroup --location $Location | Out-Null
 }
 
-# Confirm the existing workspace.
-$law = az monitor log-analytics workspace show `
+# Confirm the existing workspace. Use `az resource show` (core CLI) rather
+# than `az monitor log-analytics workspace show` to avoid pulling the
+# `log-analytics` CLI extension, which is fragile on Windows and not needed
+# for this read-only existence/customerId check.
+$law = az resource show `
     --resource-group $ResourceGroup `
-    --workspace-name $LogAnalyticsWorkspaceName `
+    --name $LogAnalyticsWorkspaceName `
+    --resource-type 'Microsoft.OperationalInsights/workspaces' `
+    --query "{customerId: properties.customerId}" `
     -o json 2>$null | ConvertFrom-Json
 if (-not $law) {
-    throw "Log Analytics workspace '$LogAnalyticsWorkspaceName' not found in '$ResourceGroup'. Deploy intune-wipe-api first."
+    throw "Log Analytics workspace '$LogAnalyticsWorkspaceName' not found in '$ResourceGroup'. Deploy intune-device-actions first."
 }
 Write-Host "    Workspace customerId: $($law.customerId)"
 
