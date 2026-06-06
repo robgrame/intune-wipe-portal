@@ -1,9 +1,26 @@
-# Intune Wipe Portal
+# Intune Device Actions Portal
 
-Blazor Server (.NET 10) portale di **observability** sulle richieste di wipe
-emesse dalla [`intune-wipe-api`](https://github.com/robgrame/intune-wipe-api).
-Legge gli eventi strutturati (`customEvents`) dal workspace Log Analytics che
-alimenta Application Insights e li espone tramite dashboard KQL.
+Blazor Server (.NET 10) portale di **observability** sulle azioni emesse dalla
+[`intune-device-actions`](https://github.com/robgrame/intune-device-actions) API
+(wipe, autopilot-register, bitlocker-rotate). Legge gli eventi strutturati
+(`AppEvents`) dal workspace Log Analytics che alimenta Application Insights
+e li espone tramite dashboard KQL multi-capability.
+
+## Capability supportate
+
+Il portale interroga sia il taxonomy **capability-agnostic** (`action.*` —
+request received/accepted/denied, dispatch, polling, ledger lifecycle) sia
+quello **per-capability**:
+
+| Prefisso evento  | Capability             | Esempi                                          |
+| ---------------- | ---------------------- | ----------------------------------------------- |
+| `wipe.*`         | Wipe                   | `wipe.graph.issued`, `wipe.action.completed`    |
+| `autopilot.*`    | Autopilot register     | `autopilot.graph.import.issued`                 |
+| `bitlocker.*`    | BitLocker key rotate   | `bitlocker.graph.rotate.issued`                 |
+
+La dashboard ha un selettore (tabs) **All / Wipe / Autopilot / BitLocker** che
+filtra sia i counter `action.*` (via la property `actionType`) sia i counter
+Graph per-capability.
 
 ## Autenticazione e autorizzazione
 

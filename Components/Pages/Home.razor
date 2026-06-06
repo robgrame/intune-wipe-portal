@@ -1,11 +1,27 @@
 @page "/"
 @rendermode InteractiveServer
 @inject AuditQueryService Audit
+@implements IDisposable
 
-<PageTitle>Wipe dashboard</PageTitle>
+<PageTitle>Action dashboard</PageTitle>
 
-<h1 class="mb-3">Wipe dashboard</h1>
-<p class="text-muted">Last 24 hours · auto refresh every 60s</p>
+<h1 class="mb-3">Intune device actions dashboard</h1>
+<p class="text-muted">
+    Ultime 24 ore · refresh ogni 60s · capability:
+    <strong>@_capability.DisplayName()</strong>
+</p>
+
+<ul class="nav nav-pills mb-3" role="tablist">
+    @foreach (var cap in _tabs)
+    {
+        var active = cap == _capability ? "active" : "";
+        <li class="nav-item">
+            <button type="button" class="nav-link @active" @onclick="() => SetCapabilityAsync(cap)">
+                @cap.DisplayName()
+            </button>
+        </li>
+    }
+</ul>
 
 @if (_loadError is not null)
 {
@@ -24,12 +40,83 @@ else
         @KpiCard("Richieste totali", _kpis.TotalRequests, "primary")
         @KpiCard("Accettate", _kpis.Accepted, "success")
         @KpiCard("Negate", _kpis.Denied, "warning")
-        @KpiCard("Wipe inviati", _kpis.WipesIssued, "info")
-        @KpiCard("Errori transient", _kpis.TransientErrors, "secondary")
-        @KpiCard("Fail permanenti", _kpis.PermanentFailures, "danger")
+        @KpiCard("Inviate (Graph)", _kpis.TotalIssued, "info")
+        @KpiCard("Completate", _kpis.ActionCompleted, "success")
+        @KpiCard("Fallite", _kpis.ActionFailed, "danger")
     </div>
 
-    <h2 class="h5">Deny breakdown (24h)</h2>
+    <div class="row g-3 mb-4">
+        @KpiCard("Errori transient", _kpis.TotalTransientErrors, "secondary")
+        @KpiCard("Fail permanenti", _kpis.TotalPermanentFailures, "danger")
+        @KpiCard("Poll timeout", _kpis.ActionPollTimeout, "warning")
+    </div>
+
+    @if (_capability == ActionCapability.All && _kpis.PerCapability.Count > 0)
+    {
+        <h2 class="h5">Breakdown per capability (24h)</h2>
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Capability</th>
+                    <th class="text-end">Issued</th>
+                    <th class="text-end">Permanent fail</th>
+                    <th class="text-end">Transient</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var p in _kpis.PerCapability)
+            {
+                <tr>
+                    <td>@p.Capability.DisplayName()</td>
+                    <td class="text-end">@p.Issued</td>
+                    <td class="text-end">@p.PermanentFailures</td>
+                    <td class="text-end">@p.TransientErrors</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    <h2 class="h5 mt-4">Azioni in-flight</h2>
+    @if (_inFlight is null || _inFlight.Count == 0)
+    {
+        <p class="text-muted">Nessuna azione in attesa di un esito terminale.</p>
+    }
+    else
+    {
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Issued (UTC)</th>
+                    <th>Capability</th>
+                    <th>Device</th>
+                    <th>Stato</th>
+                    <th class="text-end">Da min.</th>
+                    <th>Trail</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var f in _inFlight)
+            {
+                <tr>
+                    <td>@f.IssuedAt.UtcDateTime.ToString("u")</td>
+                    <td>@(f.ActionType ?? "-")</td>
+                    <td>@(f.DeviceName ?? "-")</td>
+                    <td><code>@f.CurrentState</code></td>
+                    <td class="text-end">@f.MinutesSinceIssued</td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(f.CorrelationId))
+                        {
+                            <a href="@($"/audit/{f.CorrelationId}")">@f.CorrelationId</a>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    <h2 class="h5 mt-4">Deny breakdown (24h)</h2>
     @if (_denies is null || _denies.Count == 0)
     {
         <p class="text-muted">Nessun evento denied nel periodo.</p>
@@ -59,6 +146,7 @@ else
                 <tr>
                     <th>Timestamp (UTC)</th>
                     <th>Evento</th>
+                    <th>Capability</th>
                     <th>Device</th>
                     <th>Reason</th>
                     <th>Trail</th>
@@ -70,6 +158,7 @@ else
                 <tr>
                     <td>@e.Timestamp.UtcDateTime.ToString("u")</td>
                     <td><code>@e.EventName</code></td>
+                    <td>@(e.ActionType ?? "-")</td>
                     <td>@(e.DeviceName ?? "-")</td>
                     <td>@(e.Reason ?? "-")</td>
                     <td>
@@ -86,9 +175,19 @@ else
 }
 
 @code {
+    private static readonly ActionCapability[] _tabs = new[]
+    {
+        ActionCapability.All,
+        ActionCapability.Wipe,
+        ActionCapability.Autopilot,
+        ActionCapability.BitLocker,
+    };
+
+    private ActionCapability _capability = ActionCapability.All;
     private KpiSummary? _kpis;
     private IReadOnlyList<DenyBreakdownRow>? _denies;
     private IReadOnlyList<AuditEventRow>? _recent;
+    private IReadOnlyList<InFlightActionRow>? _inFlight;
     private string? _loadError;
     private System.Threading.Timer? _timer;
 
@@ -102,14 +201,23 @@ else
         }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
     }
 
+    private async Task SetCapabilityAsync(ActionCapability cap)
+    {
+        if (cap == _capability) return;
+        _capability = cap;
+        _kpis = null; _denies = null; _recent = null; _inFlight = null;
+        await LoadAsync();
+    }
+
     private async Task LoadAsync()
     {
         try
         {
             var window = TimeSpan.FromHours(24);
-            _kpis    = await Audit.GetKpisAsync(window, default);
-            _denies  = await Audit.GetDenyBreakdownAsync(window, default);
-            _recent  = await Audit.GetRecentEventsAsync(100, window, default);
+            _kpis     = await Audit.GetKpisAsync(window, _capability, default);
+            _denies   = await Audit.GetDenyBreakdownAsync(window, _capability, default);
+            _recent   = await Audit.GetRecentEventsAsync(100, window, _capability, default);
+            _inFlight = await Audit.GetInFlightActionsAsync(window, _capability, default);
             _loadError = null;
         }
         catch (Exception ex)

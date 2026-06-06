@@ -7,17 +7,44 @@ namespace IntuneWipePortal.Models;
 public sealed record KpiRow(string EventName, long Count);
 
 /// <summary>
+/// Per-capability counters within a <see cref="KpiSummary"/>.
+/// </summary>
+public sealed class CapabilityKpi
+{
+    public ActionCapability Capability { get; init; }
+    public long Issued { get; set; }
+    public long PermanentFailures { get; set; }
+    public long TransientErrors { get; set; }
+}
+
+/// <summary>
 /// Aggregated KPI values for the dashboard cards.
+/// Action-level counters (Accepted/Denied/Completed/Failed/PollTimeout) come
+/// from the capability-agnostic <c>action.*</c> taxonomy and are filterable by
+/// <see cref="ActionCapability"/>. Per-capability Graph-call counters live in
+/// <see cref="PerCapability"/>.
 /// </summary>
 public sealed class KpiSummary
 {
     public long TotalRequests { get; set; }
     public long Accepted { get; set; }
     public long Denied { get; set; }
-    public long WipesIssued { get; set; }
-    public long PermanentFailures { get; set; }
-    public long TransientErrors { get; set; }
+
+    // Action lifecycle (capability-agnostic — action.completed / action.failed
+    // / action.poll-timeout are emitted by ActionStatusPollerFunction
+    // regardless of the capability that issued the action).
+    public long ActionCompleted { get; set; }
+    public long ActionFailed { get; set; }
+    public long ActionPollTimeout { get; set; }
+
+    public List<CapabilityKpi> PerCapability { get; set; } = new();
+
     public DateTimeOffset GeneratedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Sum of <c>Issued</c> across all per-capability buckets.</summary>
+    public long TotalIssued => PerCapability.Sum(p => p.Issued);
+    public long TotalPermanentFailures => PerCapability.Sum(p => p.PermanentFailures);
+    public long TotalTransientErrors   => PerCapability.Sum(p => p.TransientErrors);
 }
 
 /// <summary>
@@ -37,8 +64,23 @@ public sealed record AuditEventRow(
     DateTimeOffset Timestamp,
     string EventName,
     string CorrelationId,
+    string? ActionType,
     string? DeviceName,
     string? IntuneDeviceId,
     string? EntraDeviceId,
     string? Reason,
     string? ExceptionType);
+
+/// <summary>
+/// One row of the "in-flight actions" widget: pairs the original capability
+/// <c>*.graph.*.issued</c> event with the latest action-status observation
+/// for each correlationId still non-terminal.
+/// </summary>
+public sealed record InFlightActionRow(
+    string CorrelationId,
+    string? ActionType,
+    string? DeviceName,
+    DateTimeOffset IssuedAt,
+    DateTimeOffset LastUpdate,
+    string CurrentState,
+    int MinutesSinceIssued);
