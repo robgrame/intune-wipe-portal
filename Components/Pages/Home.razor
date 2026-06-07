@@ -1,6 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @inject AuditQueryService Audit
+@inject CapabilityRegistry CapRegistry
 @implements IDisposable
 
 <PageTitle>Action dashboard</PageTitle>
@@ -8,20 +9,27 @@
 <h1 class="mb-3">Intune device actions dashboard</h1>
 <p class="text-muted">
     Ultime 24 ore · refresh ogni 60s · capability:
-    <strong>@_capability.DisplayName()</strong>
+    <strong>@_capability.DisplayName</strong>
 </p>
 
-<ul class="nav nav-pills mb-3" role="tablist">
-    @foreach (var cap in _tabs)
-    {
-        var active = cap == _capability ? "active" : "";
-        <li class="nav-item">
-            <button type="button" class="nav-link @active" @onclick="() => SetCapabilityAsync(cap)">
-                @cap.DisplayName()
-            </button>
-        </li>
-    }
-</ul>
+@if (_tabs is null)
+{
+    <p><em>Discovering capabilities…</em></p>
+}
+else
+{
+    <ul class="nav nav-pills mb-3" role="tablist">
+        @foreach (var cap in _tabs)
+        {
+            var active = ReferenceEquals(cap, _capability) || cap.ActionTypeValue == _capability.ActionTypeValue ? "active" : "";
+            <li class="nav-item">
+                <button type="button" class="nav-link @active" @onclick="() => SetCapabilityAsync(cap)">
+                    @cap.DisplayName
+                </button>
+            </li>
+        }
+    </ul>
+}
 
 @if (_loadError is not null)
 {
@@ -40,7 +48,7 @@ else
         @KpiCard("Richieste totali", _kpis.TotalRequests, "primary")
         @KpiCard("Accettate", _kpis.Accepted, "success")
         @KpiCard("Negate", _kpis.Denied, "warning")
-        @KpiCard("Inviate (Graph)", _kpis.TotalIssued, "info")
+        @KpiCard("Inviate", _kpis.TotalIssued, "info")
         @KpiCard("Completate", _kpis.ActionCompleted, "success")
         @KpiCard("Fallite", _kpis.ActionFailed, "danger")
     </div>
@@ -51,7 +59,7 @@ else
         @KpiCard("Poll timeout", _kpis.ActionPollTimeout, "warning")
     </div>
 
-    @if (_capability == ActionCapability.All && _kpis.PerCapability.Count > 0)
+    @if (_capability.IsAll && _kpis.PerCapability.Count > 0)
     {
         <h2 class="h5">Breakdown per capability (24h)</h2>
         <table class="table table-sm table-striped">
@@ -67,7 +75,7 @@ else
             @foreach (var p in _kpis.PerCapability)
             {
                 <tr>
-                    <td>@p.Capability.DisplayName()</td>
+                    <td>@p.Capability.DisplayName</td>
                     <td class="text-end">@p.Issued</td>
                     <td class="text-end">@p.PermanentFailures</td>
                     <td class="text-end">@p.TransientErrors</td>
@@ -175,15 +183,8 @@ else
 }
 
 @code {
-    private static readonly ActionCapability[] _tabs = new[]
-    {
-        ActionCapability.All,
-        ActionCapability.Wipe,
-        ActionCapability.Autopilot,
-        ActionCapability.BitLocker,
-    };
-
-    private ActionCapability _capability = ActionCapability.All;
+    private IReadOnlyList<CapabilityDescriptor>? _tabs;
+    private CapabilityDescriptor _capability = CapabilityDescriptor.All;
     private KpiSummary? _kpis;
     private IReadOnlyList<DenyBreakdownRow>? _denies;
     private IReadOnlyList<AuditEventRow>? _recent;
@@ -193,6 +194,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        _tabs = await CapRegistry.GetCapabilitiesAsync(default);
+        // Pin the local _capability reference to the All instance returned by
+        // the registry so reference-equality comparisons in the tab loop work.
+        _capability = _tabs.FirstOrDefault(c => c.IsAll) ?? CapabilityDescriptor.All;
         await LoadAsync();
         _timer = new System.Threading.Timer(async _ =>
         {
@@ -201,9 +206,9 @@ else
         }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
     }
 
-    private async Task SetCapabilityAsync(ActionCapability cap)
+    private async Task SetCapabilityAsync(CapabilityDescriptor cap)
     {
-        if (cap == _capability) return;
+        if (cap.ActionTypeValue == _capability.ActionTypeValue) return;
         _capability = cap;
         _kpis = null; _denies = null; _recent = null; _inFlight = null;
         await LoadAsync();

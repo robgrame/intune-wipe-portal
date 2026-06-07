@@ -20,10 +20,16 @@ namespace IntuneWipePortal.Services;
 ///   (request received/accepted/denied, dispatch, polling status, ledger
 ///   lifecycle). Filtering by capability uses the <c>actionType</c> property
 ///   on the event.</description></item>
-///   <item><description><c>wipe.* | autopilot.* | bitlocker.*</c> —
-///   capability-specific events (Graph call outcomes, runner consumed/failed).
-///   </description></item>
+///   <item><description><c>{prefix}*</c> (e.g. <c>wipe.</c>, <c>bitlocker.</c>,
+///   <c>rename.</c>) — capability-specific events (Graph or REST call outcomes,
+///   runner consumed/failed). The set of prefixes is discovered dynamically
+///   via <see cref="CapabilityRegistry"/>.</description></item>
 /// </list>
+///
+/// All methods take a <see cref="CapabilityDescriptor"/> — pass
+/// <see cref="CapabilityDescriptor.All"/> to span every capability. The service
+/// pulls the full known-prefix set from <see cref="CapabilityRegistry"/> on
+/// demand to keep "all capabilities" queries auto-discovering.
 /// </summary>
 public sealed class AuditQueryService
 {
@@ -34,35 +40,38 @@ public sealed class AuditQueryService
     private const string ActionPollTimeout = "action.poll-timeout";
     private const string ActionStateChanged = "action.state-changed";
 
-    private static readonly string[] AllPrefixes = new[] { "action.", "wipe.", "autopilot.", "bitlocker." };
-
     private readonly LogsQueryClient _client;
     private readonly string _workspaceId;
+    private readonly CapabilityRegistry _registry;
     private readonly ILogger<AuditQueryService> _log;
 
-    public AuditQueryService(LogsQueryClient client, IConfiguration cfg, ILogger<AuditQueryService> log)
+    public AuditQueryService(
+        LogsQueryClient client,
+        IConfiguration cfg,
+        CapabilityRegistry registry,
+        ILogger<AuditQueryService> log)
     {
         _client = client;
         _workspaceId = cfg["Monitor:WorkspaceId"]
             ?? throw new InvalidOperationException("Monitor:WorkspaceId is required");
+        _registry = registry;
         _log = log;
     }
 
     /// <summary>
     /// Computes KPI counters for the dashboard cards over <paramref name="window"/>.
-    /// When <paramref name="capability"/> is <see cref="ActionCapability.All"/>
+    /// When <paramref name="capability"/> is <see cref="CapabilityDescriptor.All"/>
     /// the action-level counters span all capabilities; otherwise they are
     /// filtered via the <c>actionType</c> property on the action.* events.
     /// </summary>
-    public async Task<KpiSummary> GetKpisAsync(TimeSpan window, ActionCapability capability, CancellationToken ct)
+    public async Task<KpiSummary> GetKpisAsync(TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
     {
-        var actionTypeFilter = capability.ActionTypeValue();
         // Use a `| where true` no-op when no capability filter is applied so
         // the KQL line layout stays stable (avoids whitespace-only lines that
         // can confuse error reporting and produce hard-to-read parse errors).
-        var actionTypeClause = actionTypeFilter is null
+        var actionTypeClause = capability.ActionTypeValue is null
             ? "| where true"
-            : $"| where tostring(Properties.actionType) == \"{actionTypeFilter}\"";
+            : $"| where tostring(Properties.actionType) == \"{capability.ActionTypeValue}\"";
 
         // action.* counters (capability filter via actionType property).
         var actionQuery = $$"""
@@ -93,35 +102,35 @@ public sealed class AuditQueryService
         }
         s.TotalRequests = s.Accepted + s.Denied;
 
-        // Per-capability Graph-call counters. When a single capability is
-        // selected, query only its prefix; otherwise iterate the three.
-        var caps = capability == ActionCapability.All
-            ? ActionCapabilityExtensions.Concrete()
+        // Per-capability call counters. When a single capability is
+        // selected, query only its prefix; otherwise iterate every concrete
+        // capability discovered by the registry.
+        var caps = capability.IsAll
+            ? await _registry.GetConcreteAsync(ct)
             : new[] { capability };
 
         foreach (var cap in caps)
         {
-            var prefix = cap.EventPrefix();
-            if (prefix is null) continue;
+            if (cap.EventPrefix is null) continue;
 
             var capQuery = $$"""
                 AppEvents
                 | where TimeGenerated > ago({{ToKql(window)}})
-                | where Name startswith "{{prefix}}"
+                | where Name startswith "{{cap.EventPrefix}}"
                 | summarize Count = count() by Name
                 """;
             var capRows = await ExecuteAsync(capQuery, window, ct,
                 r => new KpiRow(r.GetString("Name") ?? "", r.GetInt64("Count") ?? 0));
 
             var bucket = new CapabilityKpi { Capability = cap };
-            var issued    = cap.IssuedEventName();
-            var permFail  = cap.FailedPermanentEventName();
-            var transient = cap.TransientEventName();
             foreach (var row in capRows)
             {
-                if (row.EventName == issued)         bucket.Issued += row.Count;
-                else if (row.EventName == permFail)  bucket.PermanentFailures += row.Count;
-                else if (row.EventName == transient) bucket.TransientErrors += row.Count;
+                if (cap.IssuedEventName is not null && row.EventName == cap.IssuedEventName)
+                    bucket.Issued += row.Count;
+                else if (cap.FailedPermanentEventName is not null && row.EventName == cap.FailedPermanentEventName)
+                    bucket.PermanentFailures += row.Count;
+                else if (cap.TransientEventName is not null && row.EventName == cap.TransientEventName)
+                    bucket.TransientErrors += row.Count;
             }
             s.PerCapability.Add(bucket);
         }
@@ -130,12 +139,11 @@ public sealed class AuditQueryService
     }
 
     public async Task<IReadOnlyList<DenyBreakdownRow>> GetDenyBreakdownAsync(
-        TimeSpan window, ActionCapability capability, CancellationToken ct)
+        TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
     {
-        var actionTypeFilter = capability.ActionTypeValue();
-        var actionTypeClause = actionTypeFilter is null
+        var actionTypeClause = capability.ActionTypeValue is null
             ? "| where true"
-            : $"| where tostring(Properties.actionType) == \"{actionTypeFilter}\"";
+            : $"| where tostring(Properties.actionType) == \"{capability.ActionTypeValue}\"";
 
         var query = $$"""
             AppEvents
@@ -151,15 +159,14 @@ public sealed class AuditQueryService
     }
 
     public async Task<IReadOnlyList<AuditEventRow>> GetRecentEventsAsync(
-        int take, TimeSpan window, ActionCapability capability, CancellationToken ct)
+        int take, TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
     {
-        var prefixListKql = BuildPrefixOrClause(capability);
-        var actionTypeFilter = capability.ActionTypeValue();
-        var actionTypeClause = actionTypeFilter is null
+        var prefixListKql = await BuildPrefixOrClauseAsync(capability, ct);
+        var actionTypeClause = capability.ActionTypeValue is null
             ? "| where true"
             // Restrict only the action.* slice; capability prefix already
             // implies the capability for non-action.* events.
-            : $"| where not(Name startswith \"action.\") or tostring(Properties.actionType) == \"{actionTypeFilter}\"";
+            : $"| where not(Name startswith \"action.\") or tostring(Properties.actionType) == \"{capability.ActionTypeValue}\"";
 
         var query = $$"""
             AppEvents
@@ -192,7 +199,7 @@ public sealed class AuditQueryService
             return Array.Empty<AuditEventRow>();
         }
 
-        var prefixListKql = BuildPrefixOrClause(ActionCapability.All);
+        var prefixListKql = await BuildPrefixOrClauseAsync(CapabilityDescriptor.All, ct);
         var query = $$"""
             AppEvents
             | where TimeGenerated > ago(30d)
@@ -214,26 +221,34 @@ public sealed class AuditQueryService
 
     /// <summary>
     /// Returns in-flight actions — those that have been issued (capability
-    /// Graph call accepted) but for which no terminal <c>action.completed |
-    /// action.failed | action.poll-timeout</c> event has been emitted yet.
-    /// Useful to flag stuck devices on the dashboard.
+    /// downstream call accepted) but for which no terminal
+    /// <c>action.completed | action.failed | action.poll-timeout</c> event has
+    /// been emitted yet. Capabilities with no curated <c>IssuedEventName</c>
+    /// are skipped from the "issued" anchor (they cannot produce in-flight
+    /// rows until added to <see cref="KnownCapabilities"/>).
     /// </summary>
     public async Task<IReadOnlyList<InFlightActionRow>> GetInFlightActionsAsync(
-        TimeSpan window, ActionCapability capability, CancellationToken ct)
+        TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
     {
-        // Issued events: union of the per-capability *.graph.*.issued events,
-        // tagged with the originating actionType so the UI can show it.
-        var issuedClauses = (capability == ActionCapability.All
-                ? ActionCapabilityExtensions.Concrete()
-                : new[] { capability })
-            .Select(c => $"(Name == \"{c.IssuedEventName()}\")")
-            .ToArray();
-        var issuedWhere = string.Join(" or ", issuedClauses);
+        var caps = capability.IsAll
+            ? await _registry.GetConcreteAsync(ct)
+            : new[] { capability };
 
-        var actionTypeFilter = capability.ActionTypeValue();
-        var terminalFilter = actionTypeFilter is null
+        var issuedNames = caps
+            .Where(c => c.IssuedEventName is not null)
+            .Select(c => c.IssuedEventName!)
+            .ToArray();
+
+        // No capability has an explicit Issued event yet → nothing to anchor
+        // the in-flight query on. Return empty rather than emit invalid KQL.
+        if (issuedNames.Length == 0) return Array.Empty<InFlightActionRow>();
+
+        var issuedWhere = string.Join(" or ",
+            issuedNames.Select(n => $"(Name == \"{n}\")"));
+
+        var terminalFilter = capability.ActionTypeValue is null
             ? "| where true"
-            : $"| where tostring(Properties.actionType) == \"{actionTypeFilter}\"";
+            : $"| where tostring(Properties.actionType) == \"{capability.ActionTypeValue}\"";
 
         // Note: identifier 'latest' is reserved in some KQL contexts; we use
         // 'lastSeen' to avoid the parser tripping. The state projection uses
@@ -290,20 +305,24 @@ public sealed class AuditQueryService
             (int)(r.GetInt64("MinutesSinceIssued") ?? 0)));
     }
 
-    private static string BuildPrefixOrClause(ActionCapability capability)
+    /// <summary>
+    /// Builds a <c>(Name startswith "x" or Name startswith "y" …)</c> clause
+    /// covering the capability-agnostic <c>action.</c> prefix plus the
+    /// capability-specific prefix(es) discovered from the registry.
+    /// </summary>
+    private async Task<string> BuildPrefixOrClauseAsync(CapabilityDescriptor capability, CancellationToken ct)
     {
-        // Build a (Name startswith "x" or Name startswith "y" ...) expression.
-        // We always include "action." (capability-agnostic), plus the relevant
-        // capability prefix(es).
         var prefixes = new List<string> { "action." };
-        if (capability == ActionCapability.All)
+        if (capability.IsAll)
         {
-            prefixes.AddRange(AllPrefixes.Where(p => p != "action."));
+            var all = await _registry.GetConcreteAsync(ct);
+            foreach (var c in all)
+                if (c.EventPrefix is not null && !prefixes.Contains(c.EventPrefix))
+                    prefixes.Add(c.EventPrefix);
         }
-        else
+        else if (capability.EventPrefix is not null)
         {
-            var p = capability.EventPrefix();
-            if (p is not null) prefixes.Add(p);
+            prefixes.Add(capability.EventPrefix);
         }
         return string.Join(" or ",
             prefixes.Select(p => $"Name startswith \"{p}\""));

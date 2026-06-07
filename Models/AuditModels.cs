@@ -11,7 +11,12 @@ public sealed record KpiRow(string EventName, long Count);
 /// </summary>
 public sealed class CapabilityKpi
 {
-    public ActionCapability Capability { get; init; }
+    /// <summary>
+    /// Descriptor for the capability this bucket aggregates. Never <c>null</c>
+    /// and never the synthetic <see cref="CapabilityDescriptor.All"/> sentinel
+    /// — the per-capability breakdown only emits concrete capabilities.
+    /// </summary>
+    public required CapabilityDescriptor Capability { get; init; }
     public long Issued { get; set; }
     public long PermanentFailures { get; set; }
     public long TransientErrors { get; set; }
@@ -21,8 +26,8 @@ public sealed class CapabilityKpi
 /// Aggregated KPI values for the dashboard cards.
 /// Action-level counters (Accepted/Denied/Completed/Failed/PollTimeout) come
 /// from the capability-agnostic <c>action.*</c> taxonomy and are filterable by
-/// <see cref="ActionCapability"/>. Per-capability Graph-call counters live in
-/// <see cref="PerCapability"/>.
+/// <see cref="CapabilityDescriptor"/>. Per-capability Graph/REST call counters
+/// live in <see cref="PerCapability"/>.
 /// </summary>
 public sealed class KpiSummary
 {

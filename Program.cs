@@ -58,6 +58,8 @@ builder.Services.AddSingleton(_ =>
     return new LogsQueryClient(new DefaultAzureCredential(credOptions));
 });
 builder.Services.AddSingleton<AuditQueryService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<CapabilityRegistry>();
 
 // --- Razor components (Interactive Server) + cascading auth state so
 // AuthorizeView / AuthorizeRouteView work end-to-end.
