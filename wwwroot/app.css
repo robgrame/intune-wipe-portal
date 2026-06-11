@@ -1,23 +1,93 @@
+/* ---------------------------------------------------------------------------
+   Brand palette (override of Bootstrap's blue defaults).
+   --brand-green: primary brand color (#008652)
+   --brand-green-dark: darker shade for hover/active states
+   --brand-green-light: lighter shade for backgrounds/highlights
+   --------------------------------------------------------------------------- */
+:root {
+    --brand-green: #008652;
+    --brand-green-dark: #006b41;
+    --brand-green-light: #00a063;
+    --brand-green-50: #e8f5ee;
+    --focus-ring: rgba(0, 134, 82, 0.35);
+}
+
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: #f6f8f7;
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: var(--brand-green-dark);
+}
+
+a:hover {
+    color: var(--brand-green);
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--brand-green);
+    border-color: var(--brand-green-dark);
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--brand-green-dark);
+    border-color: var(--brand-green-dark);
+}
+
+.btn-outline-primary {
+    color: var(--brand-green-dark);
+    border-color: var(--brand-green-dark);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    color: #fff;
+    background-color: var(--brand-green);
+    border-color: var(--brand-green);
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus,
+.form-control:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem #ffffff, 0 0 0 0.25rem var(--focus-ring);
+    border-color: var(--brand-green);
+}
+
+.form-control:focus {
+    border-color: var(--brand-green-light);
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+    background-color: var(--brand-green);
+}
+
+.nav-pills .nav-link {
+    color: var(--brand-green-dark);
+}
+
+.nav-pills .nav-link:hover:not(.active) {
+    background-color: var(--brand-green-50);
+}
+
+/* Slightly softer card/table look across the dashboard. */
+.card {
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.table > :not(caption) > * > * {
+    border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
 .content {
     padding-top: 1.1rem;
+}
+
+h1, h2, h3, .h1, .h2, .h3 {
+    color: #1f2d24;
 }
 
 h1:focus {
