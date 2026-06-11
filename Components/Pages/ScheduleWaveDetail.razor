@@ -1,5 +1,6 @@
 @page "/schedule/{WaveId:guid}"
 @rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanScheduleWrite")]
 @inject WipeScheduleService Svc
 @inject NavigationManager Nav
 @inject ILogger<ScheduleWaveDetail> Log
@@ -60,7 +61,7 @@ else
                         <div class="col-md-2">
                             <label class="form-label">Status</label>
                             <InputSelect class="form-select" @bind-Value="_edit.Status">
-                                @foreach (var s in WipeWaveStatus.All)
+                                @foreach (var s in WipeWaveStatus.OperatorSelectable)
                                 {
                                     <option value="@s">@s</option>
                                 }

@@ -20,6 +20,17 @@ public static class WipeWaveStatus
     public static readonly string[] All =
         { Draft, Scheduled, Executing, Completed, Canceled };
 
+    /// <summary>
+    /// Statuses the UI lets a human OPERATOR choose. <see cref="Executing"/>
+    /// is owned by the future scheduler (operators must not set it manually
+    /// or they bypass the runner's temporal gate); <see cref="Completed"/>
+    /// is owned by the runner after a successful wipe. <see cref="Canceled"/>
+    /// stays operator-settable so a wave can be aborted, but the service
+    /// rejects flipping it to Completed/Executing.
+    /// </summary>
+    public static readonly string[] OperatorSelectable =
+        { Draft, Scheduled, Canceled };
+
     public static readonly HashSet<string> Mutable =
         new(StringComparer.OrdinalIgnoreCase) { Draft, Scheduled };
 

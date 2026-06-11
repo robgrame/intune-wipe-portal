@@ -170,8 +170,10 @@ public sealed class WipeScheduleService
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Wave name is required.", nameof(name));
-        if (!WipeWaveStatus.All.Contains(status, StringComparer.OrdinalIgnoreCase))
-            throw new ArgumentException($"Unknown status '{status}'.", nameof(status));
+        if (!WipeWaveStatus.OperatorSelectable.Contains(status, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException(
+                $"Status '{status}' is not operator-selectable. Allowed: {string.Join(", ", WipeWaveStatus.OperatorSelectable)}.",
+                nameof(status));
 
         await EnsureTablesAsync(ct).ConfigureAwait(false);
 
@@ -190,18 +192,52 @@ public sealed class WipeScheduleService
             UpdatedAtUtc   = DateTimeOffset.UtcNow,
         };
         await _waves.AddEntityAsync(entity, ct).ConfigureAwait(false);
+        _log.LogInformation(
+            "Schedule wave created — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status} createdBy={CreatedBy}",
+            id, entity.Name, entity.ScheduledAtUtc, entity.Status, createdBy ?? "<anonymous>");
         return id;
     }
 
-    /// <summary>Replaces the editable fields of an existing wave.</summary>
+    /// <summary>
+    /// Replaces the editable fields of an existing wave. Status transitions
+    /// are validated: operators may move freely between
+    /// <see cref="WipeWaveStatus.OperatorSelectable"/> states
+    /// (Draft / Scheduled / Canceled), but cannot flip a wave to
+    /// <c>Executing</c> or <c>Completed</c> from the UI — those statuses
+    /// are owned by the runner / scheduler, and setting them manually
+    /// would silently disable the temporal gate (because
+    /// <see cref="WipeWaveStatus.ClientVisible"/> excludes Completed).
+    /// </summary>
     public async Task UpdateWaveAsync(Guid waveId, string name, DateTimeOffset scheduledAtUtc,
         string status, string? description, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Wave name is required.", nameof(name));
+        if (!WipeWaveStatus.OperatorSelectable.Contains(status, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException(
+                $"Status '{status}' is not operator-selectable. Allowed: {string.Join(", ", WipeWaveStatus.OperatorSelectable)}.",
+                nameof(status));
+
         var pk = WipeScheduleWaveEntity.PartitionConstant;
         var rk = waveId.ToString("D").ToLowerInvariant();
         var resp = await _waves.GetEntityAsync<WipeScheduleWaveEntity>(pk, rk, cancellationToken: ct)
             .ConfigureAwait(false);
         var w = resp.Value;
+
+        // Block downgrading a runner/scheduler-owned status back to operator
+        // state — e.g. flipping an executing wave back to draft would be
+        // surprising and is almost certainly an operator mistake.
+        if (string.Equals(w.Status, WipeWaveStatus.Executing, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(status, WipeWaveStatus.Canceled, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "An executing wave can only be transitioned to 'canceled' by an operator.");
+        }
+        if (string.Equals(w.Status, WipeWaveStatus.Completed, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("A completed wave cannot be modified.");
+        }
+
         w.Name           = name.Trim();
         w.Description    = string.IsNullOrWhiteSpace(description) ? null : description!.Trim();
         w.ScheduledAtUtc = scheduledAtUtc.ToUniversalTime();
@@ -209,6 +245,9 @@ public sealed class WipeScheduleService
         w.UpdatedAtUtc   = DateTimeOffset.UtcNow;
         await _waves.UpdateEntityAsync(w, w.ETag, TableUpdateMode.Replace, ct)
             .ConfigureAwait(false);
+        _log.LogInformation(
+            "Schedule wave updated — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status}",
+            waveId, w.Name, w.ScheduledAtUtc, w.Status);
     }
 
     public async Task DeleteWaveAsync(Guid waveId, CancellationToken ct = default)
@@ -216,12 +255,13 @@ public sealed class WipeScheduleService
         var pk = waveId.ToString("D").ToLowerInvariant();
         // Members first; orphan members would be filtered out by the API
         // anyway but cleaning up is cheap.
+        int memberCount = 0;
         try
         {
             await foreach (var m in _members.QueryAsync<WipeScheduleWaveMemberEntity>(
                 $"PartitionKey eq '{pk}'", cancellationToken: ct))
             {
-                try { await _members.DeleteEntityAsync(m.PartitionKey, m.RowKey, cancellationToken: ct); }
+                try { await _members.DeleteEntityAsync(m.PartitionKey, m.RowKey, cancellationToken: ct); memberCount++; }
                 catch (RequestFailedException ex) when (ex.Status == 404) { }
             }
         }
@@ -233,6 +273,10 @@ public sealed class WipeScheduleService
                 cancellationToken: ct).ConfigureAwait(false);
         }
         catch (RequestFailedException ex) when (ex.Status == 404) { }
+
+        _log.LogInformation(
+            "Schedule wave deleted — waveId={WaveId} membersDeleted={MemberCount}",
+            waveId, memberCount);
     }
 
     // ----- members ---------------------------------------------------------
@@ -258,6 +302,9 @@ public sealed class WipeScheduleService
         };
         // Upsert: re-adding an existing device just refreshes the metadata.
         await _members.UpsertEntityAsync(entity, TableUpdateMode.Replace, ct).ConfigureAwait(false);
+        _log.LogInformation(
+            "Schedule wave member added — waveId={WaveId} entraDeviceId={EntraDeviceId} deviceName={DeviceName} addedBy={AddedBy}",
+            waveId, entraDeviceId, entity.DeviceName, addedBy ?? "<anonymous>");
     }
 
     public async Task RemoveMemberAsync(Guid waveId, Guid entraDeviceId, CancellationToken ct = default)
@@ -268,6 +315,9 @@ public sealed class WipeScheduleService
                 waveId.ToString("D").ToLowerInvariant(),
                 entraDeviceId.ToString("D").ToLowerInvariant(),
                 cancellationToken: ct).ConfigureAwait(false);
+            _log.LogInformation(
+                "Schedule wave member removed — waveId={WaveId} entraDeviceId={EntraDeviceId}",
+                waveId, entraDeviceId);
         }
         catch (RequestFailedException ex) when (ex.Status == 404) { /* idempotent */ }
     }

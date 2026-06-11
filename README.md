@@ -32,6 +32,7 @@ dei seguenti **ruoli applicativi** definiti sulla App Registration:
 | ------------------- | ---------------------------------------------------------- |
 | `Actions.Observer`  | Lettura dashboard e trail eventi                           |
 | `Actions.Auditor`   | Lettura + future capacità di export / audit-trail estesa   |
+| `Actions.Operator`  | Lettura + scrittura sulla pagina **/schedule** (creazione, modifica, cancellazione wave e membership). Senza questo ruolo la voce di menu "Schedule" non compare e l'accesso diretto all'URL viene negato. |
 
 Gli utenti autenticati ma privi di ruolo vedono una pagina **Accesso negato**.
 
@@ -102,7 +103,8 @@ setting per puntare alla UAMI corretta.
 
 ### Wipe schedule (waves) — `/schedule`
 
-Il portale espone una pagina **Schedule** che permette agli operatori di:
+Il portale espone una pagina **Schedule** (riservata al ruolo
+`Actions.Operator`) che permette agli operatori di:
 
 - creare / modificare / cancellare *wave* di wipe (nome, descrizione,
   data/ora UTC, stato `draft|scheduled|executing|completed|canceled`);
