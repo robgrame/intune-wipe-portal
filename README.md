@@ -100,6 +100,65 @@ In Azure il portale usa una **User-Assigned Managed Identity** con ruolo
 `Log Analytics Reader` sul workspace. Imposta `AZURE_CLIENT_ID` come app
 setting per puntare alla UAMI corretta.
 
+### Wipe schedule (waves) — `/schedule`
+
+Il portale espone una pagina **Schedule** che permette agli operatori di:
+
+- creare / modificare / cancellare *wave* di wipe (nome, descrizione,
+  data/ora UTC, stato `draft|scheduled|executing|completed|canceled`);
+- aggiungere / rimuovere device da una wave (per `EntraDeviceId`).
+
+Le wave sono persistite in due tabelle Azure (`wipeschedulewaves` e
+`wipeschedulemembers`) sullo **storage account del role Web** della API
+`intune-device-actions` — il portale ci scrive direttamente con
+`TableServiceClient` + `DefaultAzureCredential`, evitando un round-trip
+HTTP via Function. Stessa strategia già usata per Log Analytics.
+
+Il client Win32 scarica la propria wave imminente via il nuovo endpoint
+mTLS `GET /api/schedule/me` esposto dal Web role della API; il
+`WipeActionRunner` applica anche un gate server-side (defense-in-depth)
+consultando direttamente le stesse tabelle.
+
+#### Config richiesta
+
+`appsettings.json` (o variabile d'ambiente):
+
+```json
+"WipeSchedule": {
+  "StorageAccountName": "<idactionsstw...>",
+  "WavesTableName":   "wipeschedulewaves",
+  "MembersTableName": "wipeschedulemembers"
+}
+```
+
+`StorageAccountName` è il nome dello storage del **Web role** della API,
+NON di un account dedicato al portale.
+
+#### Role assignment necessario (manual one-shot)
+
+La UAMI del portale deve avere il ruolo **Storage Table Data Contributor**
+sullo storage account del Web role:
+
+```pwsh
+$webStorage = az storage account show -g rg-idactions-dev `
+  -n <idactionsstw...> --query id -o tsv
+$portalUami = az identity show -g rg-idactions-portal-dev `
+  -n <portal-uami-name> --query principalId -o tsv
+az role assignment create --assignee $portalUami `
+  --role 'Storage Table Data Contributor' --scope $webStorage
+```
+
+Il role assignment è "deferito" — sarà spostato nel modulo Bicep al
+prossimo deploy infra. Senza di esso la pagina `/schedule` mostra
+"Permission denied" ma non rompe il resto del portale.
+
+#### Schema contract con la API repo
+
+I nomi tabella + colonna sono il **contratto** con la wipe capability
+nell'altro repo (`src/Capabilities.Wipe/Schedule/`). Qualsiasi rename
+deve essere fatto in lockstep nei due repo, o il flusso si rompe in
+silenzio (portale scrive, runner non gating).
+
 ## Sviluppo locale
 
 ```powershell

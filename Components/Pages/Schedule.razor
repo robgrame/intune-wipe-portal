@@ -1,0 +1,233 @@
+@page "/schedule"
+@rendermode InteractiveServer
+@inject WipeScheduleService Svc
+@inject NavigationManager Nav
+@inject ILogger<Schedule> Log
+
+<PageTitle>Wipe schedule</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 m-0">Wipe schedule</h1>
+    <button class="btn btn-primary" @onclick="StartCreate" disabled="@_creating">
+        <i class="bi bi-plus-circle"></i> New wave
+    </button>
+</div>
+
+<p class="text-muted">
+    Schedule device wipes into <strong>waves</strong>. Devices belonging to a wave
+    are deferred client-side until the wave's scheduled UTC time; the wipe
+    capability also enforces this server-side as defense-in-depth.
+</p>
+
+@if (_creating)
+{
+    <div class="card border-primary mb-3">
+        <div class="card-header bg-primary text-white">New wave</div>
+        <div class="card-body">
+            <EditForm Model="_draft" OnValidSubmit="SubmitCreate">
+                <DataAnnotationsValidator />
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">Name</label>
+                        <InputText class="form-control" @bind-Value="_draft.Name" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Scheduled (UTC)</label>
+                        <InputDate Type="InputDateType.DateTimeLocal"
+                                   class="form-control"
+                                   @bind-Value="_draft.ScheduledAtLocal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Status</label>
+                        <InputSelect class="form-select" @bind-Value="_draft.Status">
+                            @foreach (var s in WipeWaveStatus.All)
+                            {
+                                <option value="@s">@s</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Description</label>
+                        <InputText class="form-control" @bind-Value="_draft.Description" />
+                    </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn btn-success" type="submit" disabled="@_busy">Create</button>
+                    <button class="btn btn-secondary" type="button" @onclick="CancelCreate" disabled="@_busy">Cancel</button>
+                    @if (!string.IsNullOrEmpty(_error))
+                    {
+                        <span class="text-danger ms-2">@_error</span>
+                    }
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!string.IsNullOrEmpty(_listError))
+{
+    <div class="alert alert-warning">@_listError</div>
+}
+else if (_waves is null || _waves.Count == 0)
+{
+    <p class="text-muted">No waves yet. Create the first one above.</p>
+}
+else
+{
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Scheduled (UTC)</th>
+                <th>Status</th>
+                <th class="text-center">Devices</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var w in _waves)
+            {
+                <tr>
+                    <td>
+                        <a href="schedule/@w.WaveId">@w.Name</a>
+                        @if (!string.IsNullOrEmpty(w.Description))
+                        {
+                            <div class="small text-muted">@w.Description</div>
+                        }
+                    </td>
+                    <td>@w.ScheduledAtUtc.UtcDateTime.ToString("u")</td>
+                    <td>
+                        <span class="badge bg-@StatusColor(w.Status)">@w.Status</span>
+                        @if (w.HasFired && WipeWaveStatus.ClientVisible.Contains(w.Status))
+                        {
+                            <span class="badge bg-warning text-dark ms-1">past due</span>
+                        }
+                    </td>
+                    <td class="text-center">@w.MemberCount</td>
+                    <td class="small text-muted">
+                        @w.CreatedAtUtc.UtcDateTime.ToString("u")
+                        @if (!string.IsNullOrEmpty(w.CreatedBy))
+                        {
+                            <div>by @w.CreatedBy</div>
+                        }
+                    </td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary" href="schedule/@w.WaveId">Manage</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<WipeScheduleWaveView>? _waves;
+    private bool _loading = true;
+    private string? _listError;
+
+    private bool _creating;
+    private bool _busy;
+    private string? _error;
+    private WaveDraft _draft = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var result = await Svc.ListWavesAsync();
+            _waves = result.Waves;
+            _listError = result.Error;
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to list wipe waves.");
+            _listError = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void StartCreate()
+    {
+        _draft = new WaveDraft
+        {
+            Name = string.Empty,
+            ScheduledAtLocal = DateTime.UtcNow.AddHours(1),
+            Status = WipeWaveStatus.Scheduled,
+        };
+        _error = null;
+        _creating = true;
+    }
+
+    private void CancelCreate()
+    {
+        _creating = false;
+        _error = null;
+    }
+
+    private async Task SubmitCreate()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var who = await GetCallerUpnAsync();
+            var scheduledUtc = new DateTimeOffset(
+                DateTime.SpecifyKind(_draft.ScheduledAtLocal, DateTimeKind.Utc));
+            await Svc.CreateWaveAsync(_draft.Name, scheduledUtc, _draft.Status,
+                _draft.Description, who);
+            _creating = false;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to create wave.");
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthState { get; set; }
+
+    private async Task<string?> GetCallerUpnAsync()
+    {
+        if (AuthState is null) return null;
+        var s = await AuthState;
+        return s.User.Identity?.Name;
+    }
+
+    private static string StatusColor(string status) => status?.ToLowerInvariant() switch
+    {
+        "draft"     => "secondary",
+        "scheduled" => "primary",
+        "executing" => "info",
+        "completed" => "success",
+        "canceled"  => "dark",
+        _           => "light text-dark",
+    };
+
+    private sealed class WaveDraft
+    {
+        public string Name { get; set; } = string.Empty;
+        public DateTime ScheduledAtLocal { get; set; } = DateTime.UtcNow.AddHours(1);
+        public string Status { get; set; } = WipeWaveStatus.Scheduled;
+        public string? Description { get; set; }
+    }
+}

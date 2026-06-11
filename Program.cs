@@ -60,6 +60,7 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddSingleton<AuditQueryService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<CapabilityRegistry>();
+builder.Services.AddSingleton<WipeScheduleService>();
 
 // --- Razor components (Interactive Server) + cascading auth state so
 // AuthorizeView / AuthorizeRouteView work end-to-end.
