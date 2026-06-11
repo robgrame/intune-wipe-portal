@@ -322,6 +322,193 @@ public sealed class WipeScheduleService
         catch (RequestFailedException ex) when (ex.Status == 404) { /* idempotent */ }
     }
 
+    // ----- BULK members (the only practical path at 100s–1000s of devices) -
+
+    private const int AzureTableBatchSize = 100; // Azure Table SDK hard limit
+
+    /// <summary>
+    /// Bulk-adds <paramref name="rows"/> to a wave using Azure Table batch
+    /// transactions (max <see cref="AzureTableBatchSize"/> entities per
+    /// transaction, all sharing the wave id as PartitionKey — which is
+    /// already our schema). Internally deduplicates by Entra device id
+    /// (last-write-wins on duplicate keys within the same input), uses
+    /// <c>UpsertReplace</c> so re-adding an existing member just refreshes
+    /// its metadata, and chunks the input so a 1000-device import becomes
+    /// 10 round-trips instead of 1000.
+    /// </summary>
+    public async Task<BulkMemberAddResult> AddMembersBulkAsync(
+        Guid waveId,
+        IEnumerable<BulkMemberInput> rows,
+        string? addedBy,
+        CancellationToken ct = default)
+    {
+        if (waveId == Guid.Empty)
+            throw new ArgumentException("Wave id is required.", nameof(waveId));
+
+        await EnsureTablesAsync(ct).ConfigureAwait(false);
+
+        var pk = waveId.ToString("D").ToLowerInvariant();
+        var now = DateTimeOffset.UtcNow;
+
+        // Dedup by RowKey inside the input (last wins).
+        var deduped = new Dictionary<string, WipeScheduleWaveMemberEntity>(StringComparer.OrdinalIgnoreCase);
+        var inputErrors = new List<string>();
+        foreach (var r in rows ?? Array.Empty<BulkMemberInput>())
+        {
+            if (r.EntraDeviceId == Guid.Empty)
+            {
+                inputErrors.Add($"Skipped row '{r.DeviceName}': empty Entra device id.");
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(r.DeviceName))
+            {
+                inputErrors.Add($"Skipped row {r.EntraDeviceId}: empty device name.");
+                continue;
+            }
+            var rk = r.EntraDeviceId.ToString("D").ToLowerInvariant();
+            deduped[rk] = new WipeScheduleWaveMemberEntity
+            {
+                PartitionKey   = pk,
+                RowKey         = rk,
+                DeviceName     = r.DeviceName.Trim(),
+                IntuneDeviceId = string.IsNullOrWhiteSpace(r.IntuneDeviceId) ? null : r.IntuneDeviceId!.Trim(),
+                AddedBy        = addedBy,
+                AddedAtUtc     = now,
+            };
+        }
+
+        if (deduped.Count == 0)
+            return new BulkMemberAddResult(Added: 0, Skipped: inputErrors.Count, Errors: inputErrors);
+
+        int added = 0;
+        var batchErrors = new List<string>(inputErrors);
+        foreach (var chunk in Chunk(deduped.Values, AzureTableBatchSize))
+        {
+            var actions = chunk
+                .Select(e => new TableTransactionAction(TableTransactionActionType.UpsertReplace, e))
+                .ToList();
+            try
+            {
+                await _members.SubmitTransactionAsync(actions, ct).ConfigureAwait(false);
+                added += actions.Count;
+            }
+            catch (TableTransactionFailedException ex)
+            {
+                // Fallback: replay this chunk one-by-one so partial progress
+                // is captured and we get per-row diagnostics instead of an
+                // all-or-nothing failure.
+                _log.LogWarning(ex,
+                    "Bulk member transaction failed (waveId={WaveId}, chunkSize={Size}); falling back to per-entity upserts.",
+                    waveId, actions.Count);
+                foreach (var a in actions)
+                {
+                    try
+                    {
+                        await _members.UpsertEntityAsync((WipeScheduleWaveMemberEntity)a.Entity,
+                            TableUpdateMode.Replace, ct).ConfigureAwait(false);
+                        added++;
+                    }
+                    catch (Exception inner)
+                    {
+                        batchErrors.Add($"Row {a.Entity.RowKey}: {inner.Message}");
+                    }
+                }
+            }
+        }
+
+        _log.LogInformation(
+            "Schedule wave bulk-add — waveId={WaveId} added={Added} skipped={Skipped} errors={Errors} addedBy={AddedBy}",
+            waveId, added, inputErrors.Count, batchErrors.Count - inputErrors.Count, addedBy ?? "<anonymous>");
+
+        return new BulkMemberAddResult(Added: added,
+            Skipped: deduped.Count - added + inputErrors.Count,
+            Errors: batchErrors);
+    }
+
+    /// <summary>
+    /// Bulk-removes the supplied Entra device ids from a wave. Unknown ids
+    /// are silently ignored (idempotent). Chunks at the Azure Table batch
+    /// limit; on transaction failure replays the chunk individually so
+    /// partial progress is captured.
+    /// </summary>
+    public async Task<BulkMemberRemoveResult> RemoveMembersBulkAsync(
+        Guid waveId,
+        IEnumerable<Guid> entraDeviceIds,
+        CancellationToken ct = default)
+    {
+        if (waveId == Guid.Empty)
+            throw new ArgumentException("Wave id is required.", nameof(waveId));
+
+        await EnsureTablesAsync(ct).ConfigureAwait(false);
+
+        var pk = waveId.ToString("D").ToLowerInvariant();
+        var rowKeys = (entraDeviceIds ?? Array.Empty<Guid>())
+            .Where(g => g != Guid.Empty)
+            .Select(g => g.ToString("D").ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (rowKeys.Count == 0)
+            return new BulkMemberRemoveResult(Removed: 0, NotFound: 0, Errors: Array.Empty<string>());
+
+        int removed = 0, notFound = 0;
+        var errors = new List<string>();
+        foreach (var chunk in Chunk(rowKeys, AzureTableBatchSize))
+        {
+            var actions = chunk.Select(rk =>
+            {
+                var stub = new WipeScheduleWaveMemberEntity { PartitionKey = pk, RowKey = rk, ETag = ETag.All };
+                return new TableTransactionAction(TableTransactionActionType.Delete, stub, ETag.All);
+            }).ToList();
+            try
+            {
+                await _members.SubmitTransactionAsync(actions, ct).ConfigureAwait(false);
+                removed += actions.Count;
+            }
+            catch (TableTransactionFailedException)
+            {
+                // One row was probably already gone — replay individually so
+                // 404s become NotFound counters instead of breaking the chunk.
+                foreach (var a in actions)
+                {
+                    try
+                    {
+                        await _members.DeleteEntityAsync(a.Entity.PartitionKey, a.Entity.RowKey,
+                            cancellationToken: ct).ConfigureAwait(false);
+                        removed++;
+                    }
+                    catch (RequestFailedException ex) when (ex.Status == 404)
+                    {
+                        notFound++;
+                    }
+                    catch (Exception inner)
+                    {
+                        errors.Add($"Row {a.Entity.RowKey}: {inner.Message}");
+                    }
+                }
+            }
+        }
+
+        _log.LogInformation(
+            "Schedule wave bulk-remove — waveId={WaveId} removed={Removed} notFound={NotFound} errors={Errors}",
+            waveId, removed, notFound, errors.Count);
+        return new BulkMemberRemoveResult(removed, notFound, errors);
+    }
+
+    private static IEnumerable<IReadOnlyList<T>> Chunk<T>(IEnumerable<T> source, int size)
+    {
+        var buf = new List<T>(size);
+        foreach (var item in source)
+        {
+            buf.Add(item);
+            if (buf.Count == size)
+            {
+                yield return buf;
+                buf = new List<T>(size);
+            }
+        }
+        if (buf.Count > 0) yield return buf;
+    }
+
     // ----- bootstrap -------------------------------------------------------
 
     private async Task EnsureTablesAsync(CancellationToken ct)
@@ -334,3 +521,23 @@ public sealed class WipeScheduleService
 public sealed record WipeScheduleListResult(
     IReadOnlyList<WipeScheduleWaveView> Waves,
     string? Error);
+
+/// <summary>
+/// One device to add to a wave during a bulk import.
+/// </summary>
+public sealed record BulkMemberInput(string DeviceName, Guid EntraDeviceId, string? IntuneDeviceId);
+
+/// <summary>
+/// Outcome of <see cref="WipeScheduleService.AddMembersBulkAsync"/>.
+/// <c>Added</c> is the number of rows successfully upserted (refresh of an
+/// existing membership counts as an add). <c>Skipped</c> counts rows that
+/// failed input validation (empty name / empty Entra id). <c>Errors</c>
+/// carries human-readable diagnostics for both skipped and per-row backend
+/// failures.
+/// </summary>
+public sealed record BulkMemberAddResult(int Added, int Skipped, IReadOnlyList<string> Errors);
+
+/// <summary>
+/// Outcome of <see cref="WipeScheduleService.RemoveMembersBulkAsync"/>.
+/// </summary>
+public sealed record BulkMemberRemoveResult(int Removed, int NotFound, IReadOnlyList<string> Errors);
