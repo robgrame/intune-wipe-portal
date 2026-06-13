@@ -1,0 +1,643 @@
+@page "/schedule/{WaveId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanScheduleWrite")]
+@inject WipeScheduleService Svc
+@inject NavigationManager Nav
+@inject ILogger<ScheduleWaveDetail> Log
+
+<PageTitle>Wave detail</PageTitle>
+
+<p><a href="schedule">&laquo; Back to all waves</a></p>
+
+@if (_loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_wave is null)
+{
+    <div class="alert alert-warning">Wave <code>@WaveId</code> not found.</div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 m-0">
+            @_wave.Name
+            <span class="badge bg-@StatusColor(_wave.Status) ms-2">@_wave.Status</span>
+        </h1>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="StartEdit" disabled="@(_editing || _busy)">
+                <i class="bi bi-pencil"></i> Edit wave
+            </button>
+            <button class="btn btn-outline-danger" @onclick="DeleteWave"
+                    disabled="@_busy"
+                    onclick:preventDefault="false">
+                <i class="bi bi-trash"></i> Delete wave
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_editing)
+    {
+        <div class="card border-primary mb-3">
+            <div class="card-header bg-primary text-white">Edit wave</div>
+            <div class="card-body">
+                <EditForm Model="_edit" OnValidSubmit="SubmitEdit">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Name</label>
+                            <InputText class="form-control" @bind-Value="_edit.Name" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Scheduled (UTC)</label>
+                            <InputDate Type="InputDateType.DateTimeLocal"
+                                       class="form-control"
+                                       @bind-Value="_edit.ScheduledAtLocal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Status</label>
+                            <InputSelect class="form-select" @bind-Value="_edit.Status">
+                                @foreach (var s in WipeWaveStatus.OperatorSelectable)
+                                {
+                                    <option value="@s">@s</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Description</label>
+                            <InputText class="form-control" @bind-Value="_edit.Description" />
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex gap-2">
+                        <button class="btn btn-success" type="submit" disabled="@_busy">Save</button>
+                        <button class="btn btn-secondary" type="button" @onclick="CancelEdit" disabled="@_busy">Cancel</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+    else
+    {
+        <dl class="row">
+            <dt class="col-sm-3">Description</dt>
+            <dd class="col-sm-9">@(_wave.Description ?? "—")</dd>
+
+            <dt class="col-sm-3">Scheduled (UTC)</dt>
+            <dd class="col-sm-9">
+                @_wave.ScheduledAtUtc.UtcDateTime.ToString("u")
+                @if (_wave.HasFired && WipeWaveStatus.ClientVisible.Contains(_wave.Status))
+                {
+                    <span class="badge bg-warning text-dark ms-2">past due</span>
+                }
+            </dd>
+
+            <dt class="col-sm-3">Created</dt>
+            <dd class="col-sm-9">
+                @_wave.CreatedAtUtc.UtcDateTime.ToString("u")
+                @if (!string.IsNullOrEmpty(_wave.CreatedBy)) { <text> by @_wave.CreatedBy</text> }
+            </dd>
+
+            <dt class="col-sm-3">Last updated</dt>
+            <dd class="col-sm-9">@_wave.UpdatedAtUtc.UtcDateTime.ToString("u")</dd>
+        </dl>
+    }
+
+    <h2 class="h5 mt-4 mb-3">Devices in this wave (@_wave.MemberCount)</h2>
+
+    @if (_wave.IsMutable)
+    {
+        <div class="card mb-3">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link @(_addTab == AddTab.Single ? "active" : "")"
+                           href="#" @onclick="() => SwitchTab(AddTab.Single)" @onclick:preventDefault>
+                            Add one device
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_addTab == AddTab.Bulk ? "active" : "")"
+                           href="#" @onclick="() => SwitchTab(AddTab.Bulk)" @onclick:preventDefault>
+                            Bulk import (CSV)
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                @if (_addTab == AddTab.Single)
+                {
+                    <EditForm Model="_addDraft" OnValidSubmit="AddMember">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">Device name</label>
+                                <InputText class="form-control" @bind-Value="_addDraft.DeviceName" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Entra device id (GUID)</label>
+                                <InputText class="form-control" @bind-Value="_addDraft.EntraDeviceId" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Intune device id (opt.)</label>
+                                <InputText class="form-control" @bind-Value="_addDraft.IntuneDeviceId" />
+                            </div>
+                            <div class="col-md-1">
+                                <button class="btn btn-primary w-100" type="submit" disabled="@_busy">Add</button>
+                            </div>
+                        </div>
+                    </EditForm>
+                }
+                else
+                {
+                    <p class="text-muted small mb-2">
+                        Paste a CSV/TSV (one device per line). Supported columns:
+                        <code>deviceName, entraDeviceId, intuneDeviceId</code> (header optional;
+                        <code>,</code> / <code>;</code> / tab separators auto-detected).
+                        A single-column list of GUIDs is also accepted &mdash; the GUID will be
+                        used as the device name placeholder.
+                    </p>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-9">
+                            <textarea class="form-control font-monospace" rows="6"
+                                      placeholder="PC-001,11111111-1111-1111-1111-111111111111&#10;PC-002,22222222-2222-2222-2222-222222222222,abc-intune-id"
+                                      @bind="_bulkText" @bind:event="oninput"></textarea>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Or upload a .csv file</label>
+                            <InputFile class="form-control form-control-sm" OnChange="OnFileChosen" accept=".csv,.tsv,.txt" />
+                            <button class="btn btn-outline-secondary btn-sm mt-2 w-100"
+                                    type="button" @onclick="ParseBulk" disabled="@_busy">
+                                <i class="bi bi-search"></i> Preview
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm mt-1 w-100"
+                                    type="button" @onclick="ClearBulk" disabled="@_busy">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    @if (_bulkPreview is not null)
+                    {
+                        @if (_bulkPreview.HeaderError is not null)
+                        {
+                            <div class="alert alert-danger">@_bulkPreview.HeaderError</div>
+                        }
+                        else
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <span class="badge bg-success">@_bulkPreview.ValidCount valid</span>
+                                    @if (_bulkPreview.InvalidCount > 0)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1">@_bulkPreview.InvalidCount invalid</span>
+                                    }
+                                    <span class="text-muted small ms-2">(@_bulkPreview.Total rows parsed)</span>
+                                </div>
+                                <button class="btn btn-success" type="button"
+                                        disabled="@(_busy || _bulkPreview.ValidCount == 0)"
+                                        @onclick="ImportBulk">
+                                    <i class="bi bi-upload"></i> Import @_bulkPreview.ValidCount devices
+                                </button>
+                            </div>
+                            <div style="max-height: 260px; overflow:auto;">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:60px;">Line</th>
+                                            <th>Device name</th>
+                                            <th>Entra device id</th>
+                                            <th>Intune id</th>
+                                            <th style="width:140px;">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _bulkPreview.Rows.Take(200))
+                                        {
+                                            <tr class="@(row.Error is null ? "" : "table-warning")">
+                                                <td class="text-muted small">@row.LineNumber</td>
+                                                <td>@row.DeviceName</td>
+                                                <td><code class="small">@row.EntraDeviceIdRaw</code></td>
+                                                <td>@(row.IntuneDeviceId ?? "—")</td>
+                                                <td>
+                                                    @if (row.Error is null)
+                                                    {
+                                                        <span class="badge bg-success">ok</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-warning text-dark" title="@row.Error">@row.Error</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                @if (_bulkPreview.Rows.Count > 200)
+                                {
+                                    <p class="text-muted small">… preview limited to first 200 rows; all @_bulkPreview.Rows.Count will be imported.</p>
+                                }
+                            </div>
+                        }
+                    }
+                    @if (_bulkResult is not null)
+                    {
+                        <div class="alert @(_bulkResult.Errors.Count == 0 ? "alert-success" : "alert-warning") mt-2">
+                            Imported <strong>@_bulkResult.Added</strong>, skipped <strong>@_bulkResult.Skipped</strong>.
+                            @if (_bulkResult.Errors.Count > 0)
+                            {
+                                <details class="mt-2">
+                                    <summary>@_bulkResult.Errors.Count diagnostic message(s)</summary>
+                                    <ul class="mb-0 small">
+                                        @foreach (var e in _bulkResult.Errors.Take(50))
+                                        {
+                                            <li><code>@e</code></li>
+                                        }
+                                    </ul>
+                                </details>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            Membership is read-only because the wave is <strong>@_wave.Status</strong>.
+        </div>
+    }
+
+    @if (_wave.Members.Count == 0)
+    {
+        <p class="text-muted">No devices in this wave yet.</p>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+            <div class="flex-grow-1" style="max-width: 420px;">
+                <input class="form-control form-control-sm" type="search"
+                       placeholder="Filter by device name or Entra id…"
+                       @bind="_filter" @bind:event="oninput" />
+            </div>
+            <div class="text-muted small">
+                Showing @FilteredMembers.Count of @_wave.Members.Count
+            </div>
+            @if (_wave.IsMutable)
+            {
+                <button class="btn btn-sm btn-outline-danger"
+                        type="button"
+                        disabled="@(_busy || _selected.Count == 0)"
+                        @onclick="RemoveSelected">
+                    <i class="bi bi-trash"></i> Remove selected (@_selected.Count)
+                </button>
+            }
+        </div>
+
+        <div class="border rounded" style="height: 520px; overflow-y: auto;">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light position-sticky top-0">
+                    <tr>
+                        @if (_wave.IsMutable)
+                        {
+                            <th style="width:40px;">
+                                <input type="checkbox"
+                                       checked="@AllVisibleSelected"
+                                       @onchange="ToggleSelectAllVisible" />
+                            </th>
+                        }
+                        <th>Device name</th>
+                        <th>Entra ID</th>
+                        <th>Intune ID</th>
+                        <th>Added</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <Virtualize TItem="WipeScheduleMemberView" Items="FilteredMembers" Context="m" ItemSize="38">
+                        <tr>
+                            @if (_wave.IsMutable)
+                            {
+                                <td>
+                                    <input type="checkbox"
+                                           checked="@_selected.Contains(m.EntraDeviceId)"
+                                           @onchange="e => ToggleSelected(m.EntraDeviceId, (bool)e.Value!)" />
+                                </td>
+                            }
+                            <td>@m.DeviceName</td>
+                            <td><code class="small">@m.EntraDeviceId</code></td>
+                            <td>@(m.IntuneDeviceId ?? "—")</td>
+                            <td class="small text-muted">@m.AddedAtUtc.UtcDateTime.ToString("u")</td>
+                            <td>
+                                @if (_wave.IsMutable)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => RemoveMember(m.EntraDeviceId)" disabled="@_busy">
+                                        Remove
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    </Virtualize>
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public Guid WaveId { get; set; }
+
+    private WipeScheduleWaveView? _wave;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private bool _editing;
+    private WaveDraft _edit = new();
+    private MemberDraft _addDraft = new();
+
+    // Bulk import state
+    private enum AddTab { Single, Bulk }
+    private AddTab _addTab = AddTab.Single;
+    private string _bulkText = string.Empty;
+    private BulkImportResult? _bulkPreview;
+    private BulkMemberAddResult? _bulkResult;
+
+    // Member list filter + selection
+    private string _filter = string.Empty;
+    private readonly HashSet<Guid> _selected = new();
+
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState>? AuthState { get; set; }
+
+    private IList<WipeScheduleMemberView> FilteredMembers
+    {
+        get
+        {
+            if (_wave is null || _wave.Members.Count == 0)
+                return Array.Empty<WipeScheduleMemberView>();
+            if (string.IsNullOrWhiteSpace(_filter))
+                return _wave.Members.ToList();
+            var f = _filter.Trim();
+            return _wave.Members.Where(m =>
+                m.DeviceName.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                m.EntraDeviceId.ToString().Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                (m.IntuneDeviceId ?? string.Empty).Contains(f, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+    }
+
+    private bool AllVisibleSelected
+    {
+        get
+        {
+            var visible = FilteredMembers;
+            return visible.Count > 0 && visible.All(m => _selected.Contains(m.EntraDeviceId));
+        }
+    }
+
+    protected override async Task OnParametersSetAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _wave = await Svc.GetWaveWithMembersAsync(WaveId);
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to load wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void StartEdit()
+    {
+        if (_wave is null) return;
+        _edit = new WaveDraft
+        {
+            Name             = _wave.Name,
+            Description      = _wave.Description,
+            ScheduledAtLocal = _wave.ScheduledAtUtc.UtcDateTime,
+            Status           = _wave.Status,
+        };
+        _editing = true;
+        _error = null;
+    }
+
+    private void CancelEdit() { _editing = false; _error = null; }
+
+    private async Task SubmitEdit()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var scheduledUtc = new DateTimeOffset(
+                DateTime.SpecifyKind(_edit.ScheduledAtLocal, DateTimeKind.Utc));
+            await Svc.UpdateWaveAsync(WaveId, _edit.Name, scheduledUtc, _edit.Status, _edit.Description);
+            _editing = false;
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to update wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteWave()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Svc.DeleteWaveAsync(WaveId);
+            Nav.NavigateTo("schedule");
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to delete wave {WaveId}.", WaveId);
+            _error = ex.Message;
+            _busy = false;
+        }
+    }
+
+    private async Task AddMember()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            if (!Guid.TryParse(_addDraft.EntraDeviceId, out var deviceId))
+                throw new InvalidOperationException("Entra device id must be a valid GUID.");
+            var who = await GetCallerUpnAsync();
+            await Svc.AddMemberAsync(WaveId, deviceId, _addDraft.DeviceName,
+                _addDraft.IntuneDeviceId, who);
+            _addDraft = new MemberDraft();
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to add member to wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RemoveMember(Guid entraDeviceId)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Svc.RemoveMemberAsync(WaveId, entraDeviceId);
+            _selected.Remove(entraDeviceId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to remove member {DeviceId} from wave {WaveId}.",
+                entraDeviceId, WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    // ---- bulk import handlers --------------------------------------------
+
+    private void SwitchTab(AddTab t)
+    {
+        _addTab = t;
+        _error = null;
+    }
+
+    private void ParseBulk()
+    {
+        _bulkPreview = BulkImportParser.Parse(_bulkText);
+        _bulkResult = null;
+    }
+
+    private void ClearBulk()
+    {
+        _bulkText = string.Empty;
+        _bulkPreview = null;
+        _bulkResult = null;
+    }
+
+    private async Task OnFileChosen(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            // Cap at 8 MB — well above any realistic device-list CSV.
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 8 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _bulkText = await reader.ReadToEndAsync();
+            ParseBulk();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to read uploaded file: {ex.Message}";
+        }
+    }
+
+    private async Task ImportBulk()
+    {
+        if (_bulkPreview is null || _bulkPreview.ValidCount == 0) return;
+        _busy = true; _error = null;
+        try
+        {
+            var who = await GetCallerUpnAsync();
+            _bulkResult = await Svc.AddMembersBulkAsync(
+                WaveId,
+                BulkImportParser.ValidInputs(_bulkPreview.Rows),
+                who);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Bulk import failed for wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    // ---- selection + bulk remove ----------------------------------------
+
+    private void ToggleSelected(Guid id, bool isChecked)
+    {
+        if (isChecked) _selected.Add(id);
+        else _selected.Remove(id);
+    }
+
+    private void ToggleSelectAllVisible(ChangeEventArgs e)
+    {
+        var check = e.Value is bool b && b;
+        foreach (var m in FilteredMembers)
+        {
+            if (check) _selected.Add(m.EntraDeviceId);
+            else _selected.Remove(m.EntraDeviceId);
+        }
+    }
+
+    private async Task RemoveSelected()
+    {
+        if (_selected.Count == 0) return;
+        _busy = true; _error = null;
+        try
+        {
+            var ids = _selected.ToArray();
+            var result = await Svc.RemoveMembersBulkAsync(WaveId, ids);
+            _selected.Clear();
+            await ReloadAsync();
+            if (result.Errors.Count > 0)
+            {
+                _error = $"Removed {result.Removed} (not found: {result.NotFound}). " +
+                         $"{result.Errors.Count} error(s) — first: {result.Errors[0]}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Bulk remove failed for wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task<string?> GetCallerUpnAsync()
+    {
+        if (AuthState is null) return null;
+        var s = await AuthState;
+        return s.User.Identity?.Name;
+    }
+
+    private static string StatusColor(string status) => status?.ToLowerInvariant() switch
+    {
+        "draft"     => "secondary",
+        "scheduled" => "primary",
+        "executing" => "info",
+        "completed" => "success",
+        "canceled"  => "dark",
+        _           => "light text-dark",
+    };
+
+    private sealed class WaveDraft
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public DateTime ScheduledAtLocal { get; set; }
+        public string Status { get; set; } = WipeWaveStatus.Scheduled;
+    }
+
+    private sealed class MemberDraft
+    {
+        public string DeviceName { get; set; } = string.Empty;
+        public string EntraDeviceId { get; set; } = string.Empty;
+        public string? IntuneDeviceId { get; set; }
+    }
+}

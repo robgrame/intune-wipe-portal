@@ -35,6 +35,16 @@ builder.Services.AddAuthorization(options =>
         "Wipe.Observer", "Wipe.Auditor", // legacy, transitional
     };
     options.AddPolicy("CanRead", p => p.RequireRole(readRoles));
+
+    // Write access to the schedule pages (create/edit/delete waves and
+    // membership) requires an explicit operator role. Fail-closed: with
+    // no Actions.Operator role on the token the schedule pages return
+    // 403, while the read pages (Dashboard / Audit) remain accessible.
+    // Add the role to the app registration when an operator should be
+    // able to schedule wipes.
+    options.AddPolicy("CanScheduleWrite",
+        p => p.RequireRole("Actions.Operator"));
+
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .RequireRole(readRoles)
@@ -60,6 +70,7 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddSingleton<AuditQueryService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<CapabilityRegistry>();
+builder.Services.AddSingleton<WipeScheduleService>();
 
 // --- Razor components (Interactive Server) + cascading auth state so
 // AuthorizeView / AuthorizeRouteView work end-to-end.

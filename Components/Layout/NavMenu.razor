@@ -18,6 +18,13 @@
                 <li class="nav-item">
                     <NavLink class="nav-link" href="audit">Audit events</NavLink>
                 </li>
+                <AuthorizeView Policy="CanScheduleWrite">
+                    <Authorized>
+                        <li class="nav-item">
+                            <NavLink class="nav-link" href="schedule">Schedule</NavLink>
+                        </li>
+                    </Authorized>
+                </AuthorizeView>
             </ul>
             <AuthorizeView>
                 <Authorized>
