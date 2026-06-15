@@ -30,6 +30,7 @@
 
     <div class="tabs">
         <div class="tab active" data-tab="overview">📊 Panoramica</div>
+        <div class="tab" data-tab="flow">🔁 Flow</div>
         <div class="tab" data-tab="trace">🔎 Trace</div>
     </div>
 
@@ -164,6 +165,29 @@
                 </div>
             </aside>
         </div>
+    </div>
+
+    <div class="tabpane" id="tab-flow">
+        <section class="panel">
+            <h2>Power Flow <span class="sub" style="font-weight:400;color:var(--muted)">— stile diagramma a blocchi</span></h2>
+            <div id="flowDiagWrap" style="overflow-x:auto;background:var(--panel-bg,#fff);border-radius:8px;padding:10px;">
+                <svg id="flowDiag" viewBox="0 0 1240 420" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;min-width:900px;font-family:ui-sans-serif,system-ui,sans-serif">
+                    <defs>
+                        <marker id="fd-arrow-ok"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#16a34a"/></marker>
+                        <marker id="fd-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#d97706"/></marker>
+                        <marker id="fd-arrow-err"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#dc2626"/></marker>
+                        <marker id="fd-arrow-unk"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#9ca3af"/></marker>
+                    </defs>
+                </svg>
+            </div>
+            <div class="muted small" style="margin-top:10px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;">
+                <span><span style="color:#16a34a;font-size:14px">●</span> Healthy</span>
+                <span><span style="color:#d97706;font-size:14px">●</span> Degraded</span>
+                <span><span style="color:#dc2626;font-size:14px">●</span> Critical</span>
+                <span><span style="color:#9ca3af;font-size:14px">●</span> N/D</span>
+                <span style="opacity:.8">— spessore freccia ∝ messaggi attivi; etichette sopra le frecce = act/dlq per ogni coda</span>
+            </div>
+        </section>
     </div>
 
     <div class="tabpane" id="tab-trace">

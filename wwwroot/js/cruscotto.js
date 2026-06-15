@@ -94,6 +94,173 @@
 
       renderDiagnostics(data.diagnostics);
       renderStuckList(L.topStuck || []);
+      renderFlowDiagram(data);
+    }
+
+    // ─── Flow diagram (Intune.Up-style boxes + arrows + edge labels) ────────
+    // Layout:
+    //   Top row    (intake → dispatch):  Web | action-requests | Proc | action-dispatch | Status Poller
+    //   Bottom row (capability runners): Wipe | Autopilot | BitLocker | Rename
+    //   Edges:
+    //     - Top row: arrows between sequential boxes; label above shows act/dlq for the *next* queue
+    //     - Vertical fan-out from action-dispatch down to each capability runner
+    const FD_NS = 'http://www.w3.org/2000/svg';
+    const FD_NODE_W = 200, FD_NODE_H = 78;
+    const FD_TOP_Y = 20, FD_BOT_Y = 280;
+    // Top row x positions (5 boxes, 240 spacing, gap 40 between them).
+    const FD_TOP = [
+      { id:'web',   x:20,   label:'Web (intake)',   sub:'HTTP /api/actions' },
+      { id:'areq',  x:260,  label:'Queue',          sub:'action-requests',   queue:'action-requests' },
+      { id:'proc',  x:500,  label:'Proc',           sub:'dispatcher' },
+      { id:'adisp', x:740,  label:'Queue',          sub:'action-dispatch',   queue:'action-dispatch' },
+      { id:'poll',  x:980,  label:'Status Poller',  sub:'observes terminal state' },
+    ];
+    // Bottom row: 4 capability runners aligned roughly under the dispatch fan-out.
+    const FD_BOT = [
+      { id:'wipe',  x:140,  label:'Wipe',      sub:'wipe-action',      queue:'wipe-action' },
+      { id:'autop', x:420,  label:'Autopilot', sub:'autopilot-action', queue:'autopilot-action' },
+      { id:'bitl',  x:700,  label:'BitLocker', sub:'bitlocker-action', queue:'bitlocker-action' },
+      { id:'renm',  x:980,  label:'Rename',    sub:'rename-action',    queue:'rename-action' },
+    ];
+
+    function fdColors(status) {
+      switch ((status||'').toLowerCase()) {
+        case 'green':  return { fill:'#f0fdf4', stroke:'#16a34a', text:'#065f46', marker:'fd-arrow-ok',   line:'#16a34a' };
+        case 'yellow': return { fill:'#fffbeb', stroke:'#d97706', text:'#92400e', marker:'fd-arrow-warn', line:'#d97706' };
+        case 'red':    return { fill:'#fef2f2', stroke:'#dc2626', text:'#991b1b', marker:'fd-arrow-err',  line:'#dc2626' };
+        default:       return { fill:'#f9fafb', stroke:'#9ca3af', text:'#374151', marker:'fd-arrow-unk',  line:'#9ca3af' };
+      }
+    }
+
+    function fdEdgeWidth(active) {
+      const v = Number(active) || 0;
+      if (v <= 0)  return 2;
+      if (v < 5)   return 3;
+      if (v < 25)  return 4;
+      if (v < 100) return 6;
+      return 8;
+    }
+
+    function fdEl(tag, attrs, children) {
+      const e = document.createElementNS(FD_NS, tag);
+      if (attrs) for (const k of Object.keys(attrs)) e.setAttribute(k, attrs[k]);
+      if (children) for (const c of children) e.appendChild(c);
+      return e;
+    }
+    function fdText(x, y, txt, opts) {
+      opts = opts || {};
+      const t = fdEl('text', {
+        x: x, y: y,
+        'text-anchor': opts.anchor || 'middle',
+        'font-size':   opts.size   || 12,
+        'font-weight': opts.weight || 400,
+        fill:          opts.fill   || '#111827'
+      });
+      t.textContent = txt == null ? '' : String(txt);
+      return t;
+    }
+
+    function fdBox(spec, queue) {
+      const status = queue ? queue.status : (spec.queue ? 'gray' : 'green');
+      const c = fdColors(status);
+      const g = fdEl('g');
+      g.appendChild(fdEl('rect', {
+        x: spec.x, y: spec.y, width: FD_NODE_W, height: FD_NODE_H,
+        rx: 8, ry: 8, fill: c.fill, stroke: c.stroke, 'stroke-width': 2
+      }));
+      // Label (top)
+      g.appendChild(fdText(spec.x + FD_NODE_W/2, spec.y + 20, spec.label, { weight:600, fill:'#111827' }));
+      // Primary metric (middle)
+      const primary = queue
+        ? `act ${queue.active}  ·  dlq ${queue.deadLetter}`
+        : (spec.primary || '—');
+      g.appendChild(fdText(spec.x + FD_NODE_W/2, spec.y + 42, primary, { size:13, weight:700, fill:c.text }));
+      // Sub (bottom)
+      g.appendChild(fdText(spec.x + FD_NODE_W/2, spec.y + 62, spec.sub || '', { size:10, fill:'#6b7280' }));
+      // Tooltip
+      const title = fdEl('title');
+      title.textContent = queue
+        ? `${spec.sub || spec.label}\nactive=${queue.active}, dlq=${queue.deadLetter}, scheduled=${queue.scheduled}\nstatus=${queue.status}${queue.error ? '  (' + queue.error + ')' : ''}`
+        : (spec.label + (spec.sub ? ' — ' + spec.sub : ''));
+      g.appendChild(title);
+      return g;
+    }
+
+    function fdArrowH(fromSpec, toSpec, queue) {
+      const c = fdColors(queue ? queue.status : 'gray');
+      const w = fdEdgeWidth(queue ? queue.active : 0);
+      const x1 = fromSpec.x + FD_NODE_W;
+      const x2 = toSpec.x;
+      const y  = FD_TOP_Y + FD_NODE_H/2;
+      const g  = fdEl('g');
+      g.appendChild(fdEl('line', {
+        x1: x1, y1: y, x2: x2, y2: y,
+        stroke: c.line, 'stroke-width': w, 'marker-end': `url(#${c.marker})`, 'stroke-linecap':'round'
+      }));
+      // Edge label above midpoint
+      if (queue) {
+        const midX = (x1 + x2) / 2;
+        g.appendChild(fdText(midX, y - 8, `act ${queue.active} · dlq ${queue.deadLetter}`, { size:11, weight:500, fill:'#1f2937' }));
+      }
+      return g;
+    }
+
+    function fdArrowV(fromSpec, toSpec, queue) {
+      // Verticale dal centro bottom del top box al centro top del bottom box.
+      const c = fdColors(queue ? queue.status : 'gray');
+      const w = fdEdgeWidth(queue ? queue.active : 0);
+      const x1 = fromSpec.x + FD_NODE_W/2;
+      const y1 = FD_TOP_Y + FD_NODE_H;
+      const x2 = toSpec.x + FD_NODE_W/2;
+      const y2 = FD_BOT_Y;
+      const g  = fdEl('g');
+      // Z-shaped polyline so non-aligned columns join cleanly:
+      //   (x1,y1) → (x1, midY) → (x2, midY) → (x2, y2)
+      const midY = (y1 + y2) / 2;
+      const pts = `${x1},${y1} ${x1},${midY} ${x2},${midY} ${x2},${y2}`;
+      g.appendChild(fdEl('polyline', {
+        points: pts, fill:'none', stroke: c.line, 'stroke-width': w,
+        'marker-end': `url(#${c.marker})`, 'stroke-linecap':'round', 'stroke-linejoin':'round'
+      }));
+      if (queue) {
+        // Etichetta accanto al primo segmento orizzontale
+        g.appendChild(fdText(x2, midY - 6, `act ${queue.active} · dlq ${queue.deadLetter}`, { size:11, weight:500, fill:'#1f2937' }));
+      }
+      return g;
+    }
+
+    function renderFlowDiagram(data) {
+      const svg = document.getElementById('flowDiag');
+      if (!svg) return;
+      // Cancella tutto eccetto <defs>
+      for (let i = svg.childNodes.length - 1; i >= 0; i--) {
+        const ch = svg.childNodes[i];
+        if (ch.nodeType !== 1 || ch.nodeName.toLowerCase() !== 'defs') {
+          svg.removeChild(ch);
+        }
+      }
+      const queues = (data.queues || []);
+      const byName = {};
+      for (const q of queues) byName[q.name] = q;
+
+      // Top: positioning Y
+      const top = FD_TOP.map(s => Object.assign({ y: FD_TOP_Y }, s));
+      const bot = FD_BOT.map(s => Object.assign({ y: FD_BOT_Y }, s));
+
+      // Edges top: web→areq→proc→adisp→poll (label = next queue if any)
+      for (let i = 0; i < top.length - 1; i++) {
+        const q = top[i+1].queue ? byName[top[i+1].queue] : null;
+        svg.appendChild(fdArrowH(top[i], top[i+1], q));
+      }
+      // Edges vertical: action-dispatch (top[3]) fan-out to each bottom box
+      const dispatch = top[3];
+      for (const b of bot) {
+        const q = b.queue ? byName[b.queue] : null;
+        svg.appendChild(fdArrowV(dispatch, b, q));
+      }
+      // Nodes — disegnati DOPO le frecce così sono sopra
+      for (const s of top) svg.appendChild(fdBox(s, s.queue ? byName[s.queue] : null));
+      for (const s of bot) svg.appendChild(fdBox(s, s.queue ? byName[s.queue] : null));
     }
 
     function renderDiagnostics(diag) {
