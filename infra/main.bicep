@@ -48,6 +48,18 @@ param httpsOnly bool = true
 @maxLength(13)
 param nameSuffix string = uniqueString(resourceGroup().id)
 
+@description('Fully-qualified Service Bus namespace hosting the action queues (e.g. idactions-sb-dev.servicebus.windows.net). Required by the cruscotto to read queue runtime properties.')
+param serviceBusFullyQualifiedNamespace string = ''
+
+@description('Name of the existing Service Bus namespace (in the same RG). Used to scope the data-owner role assignment. Leave empty to derive from <namePrefix>-sb<sep><suffix>.')
+param serviceBusNamespaceName string = ''
+
+@description('Name of the existing storage account that holds the action-ledger container (Proc storage). Leave empty to derive from <namePrefix>stproc<suffix> (no separator, no hyphens — storage account naming).')
+param ledgerStorageAccountName string = ''
+
+@description('Container name on ledgerStorageAccountName that holds the per-device ledger JSON blobs.')
+param ledgerContainerName string = 'action-ledger'
+
 // ---------------------------------------------------------------------------
 var suffix       = nameSuffix
 var sep          = empty(suffix) ? '' : '-'
@@ -55,8 +67,15 @@ var planName     = toLower('${namePrefix}-plan-portal${sep}${suffix}')
 var webAppName   = toLower('${namePrefix}-portal${sep}${suffix}')
 var uamiName     = toLower('${namePrefix}-uami-portal${sep}${suffix}')
 
-// Built-in role id for "Log Analytics Reader".
-var roleLogAnalyticsReader = '73c42c96-874c-492b-b04d-ab87d138a893'
+// Derive Service Bus namespace + Proc storage account from convention if not supplied explicitly.
+var sbNsResolved      = empty(serviceBusNamespaceName)        ? toLower('${namePrefix}-sb${sep}${suffix}')        : serviceBusNamespaceName
+var sbFqdnResolved    = empty(serviceBusFullyQualifiedNamespace) ? '${sbNsResolved}.servicebus.windows.net' : serviceBusFullyQualifiedNamespace
+var ledgerAcctResolved = empty(ledgerStorageAccountName)      ? toLower('${namePrefix}stp${suffix}')               : ledgerStorageAccountName
+
+// Built-in role ids.
+var roleLogAnalyticsReader        = '73c42c96-874c-492b-b04d-ab87d138a893'
+var roleStorageBlobDataReader     = '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
+var roleServiceBusDataOwner       = '090c5cfd-751d-490a-894a-3ce6f1109419'
 
 // ---------------------------------------------------------------------------
 // User-assigned managed identity used by the portal to call the Log Analytics
@@ -80,6 +99,36 @@ resource lawReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01
     principalId: uami.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleLogAnalyticsReader)
+  }
+}
+
+// Reference the EXISTING Service Bus namespace owned by the API repo deployment.
+// Cruscotto needs Azure Service Bus Data Owner to call GetQueueRuntimePropertiesAsync.
+resource sbNs 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' existing = {
+  name: sbNsResolved
+}
+resource sbOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: sbNs
+  name: guid(sbNs.id, uami.id, roleServiceBusDataOwner)
+  properties: {
+    principalId: uami.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleServiceBusDataOwner)
+  }
+}
+
+// Reference the EXISTING Proc storage account that holds the action-ledger container.
+// Cruscotto needs Storage Blob Data Reader to enumerate & download ledger blobs.
+resource ledgerStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: ledgerAcctResolved
+}
+resource ledgerReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: ledgerStorage
+  name: guid(ledgerStorage.id, uami.id, roleStorageBlobDataReader)
+  properties: {
+    principalId: uami.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleStorageBlobDataReader)
   }
 }
 
@@ -128,6 +177,9 @@ resource web 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'AzureAd__SignedOutCallbackPath',  value: '/signout-callback-oidc' }
         { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
         { name: 'WEBSITE_RUN_FROM_PACKAGE',        value: '1' }
+        { name: 'Cruscotto__ServiceBusFullyQualifiedNamespace', value: sbFqdnResolved }
+        { name: 'Cruscotto__LedgerStorageAccount', value: ledgerAcctResolved }
+        { name: 'Cruscotto__LedgerContainer',      value: ledgerContainerName }
       ]
     }
   }

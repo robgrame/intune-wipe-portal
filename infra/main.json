@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1084247451300751751"
+      "templateHash": "1342652298071597379"
     }
   },
   "parameters": {
@@ -77,6 +77,34 @@
       "metadata": {
         "description": "Optional suffix appended to every resource name to keep them globally unique. Defaults to uniqueString(resourceGroup().id) for back-compat. Pass an empty string to deploy without any suffix (resource names will be e.g. <namePrefix>-portal). Must be lowercase alphanumeric."
       }
+    },
+    "serviceBusFullyQualifiedNamespace": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Fully-qualified Service Bus namespace hosting the action queues (e.g. idactions-sb-dev.servicebus.windows.net). Required by the cruscotto to read queue runtime properties."
+      }
+    },
+    "serviceBusNamespaceName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the existing Service Bus namespace (in the same RG). Used to scope the data-owner role assignment. Leave empty to derive from <namePrefix>-sb<sep><suffix>."
+      }
+    },
+    "ledgerStorageAccountName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the existing storage account that holds the action-ledger container (Proc storage). Leave empty to derive from <namePrefix>stproc<suffix> (no separator, no hyphens — storage account naming)."
+      }
+    },
+    "ledgerContainerName": {
+      "type": "string",
+      "defaultValue": "action-ledger",
+      "metadata": {
+        "description": "Container name on ledgerStorageAccountName that holds the per-device ledger JSON blobs."
+      }
     }
   },
   "variables": {
@@ -85,7 +113,12 @@
     "planName": "[toLower(format('{0}-plan-portal{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix')))]",
     "webAppName": "[toLower(format('{0}-portal{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix')))]",
     "uamiName": "[toLower(format('{0}-uami-portal{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix')))]",
-    "roleLogAnalyticsReader": "73c42c96-874c-492b-b04d-ab87d138a893"
+    "sbNsResolved": "[if(empty(parameters('serviceBusNamespaceName')), toLower(format('{0}-sb{1}{2}', parameters('namePrefix'), variables('sep'), variables('suffix'))), parameters('serviceBusNamespaceName'))]",
+    "sbFqdnResolved": "[if(empty(parameters('serviceBusFullyQualifiedNamespace')), format('{0}.servicebus.windows.net', variables('sbNsResolved')), parameters('serviceBusFullyQualifiedNamespace'))]",
+    "ledgerAcctResolved": "[if(empty(parameters('ledgerStorageAccountName')), toLower(format('{0}stp{1}', parameters('namePrefix'), variables('suffix'))), parameters('ledgerStorageAccountName'))]",
+    "roleLogAnalyticsReader": "73c42c96-874c-492b-b04d-ab87d138a893",
+    "roleStorageBlobDataReader": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+    "roleServiceBusDataOwner": "090c5cfd-751d-490a-894a-3ce6f1109419"
   },
   "resources": [
     {
@@ -103,6 +136,34 @@
         "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
         "principalType": "ServicePrincipal",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleLogAnalyticsReader'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.ServiceBus/namespaces', variables('sbNsResolved'))]",
+      "name": "[guid(resourceId('Microsoft.ServiceBus/namespaces', variables('sbNsResolved')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), variables('roleServiceBusDataOwner'))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleServiceBusDataOwner'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('ledgerAcctResolved'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('ledgerAcctResolved')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), variables('roleStorageBlobDataReader'))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleStorageBlobDataReader'))]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
@@ -188,6 +249,18 @@
             {
               "name": "WEBSITE_RUN_FROM_PACKAGE",
               "value": "1"
+            },
+            {
+              "name": "Cruscotto__ServiceBusFullyQualifiedNamespace",
+              "value": "[variables('sbFqdnResolved')]"
+            },
+            {
+              "name": "Cruscotto__LedgerStorageAccount",
+              "value": "[variables('ledgerAcctResolved')]"
+            },
+            {
+              "name": "Cruscotto__LedgerContainer",
+              "value": "[parameters('ledgerContainerName')]"
             }
           ]
         }

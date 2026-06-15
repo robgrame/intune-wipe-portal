@@ -57,7 +57,7 @@ builder.Services.AddControllersWithViews()
 // --- App Insights / Log Analytics client. DefaultAzureCredential will pick up
 // the user-assigned managed identity in Azure via AZURE_CLIENT_ID; in dev it
 // falls back to Azure CLI / VS sign-in.
-builder.Services.AddSingleton(_ =>
+builder.Services.AddSingleton<Azure.Core.TokenCredential>(_ =>
 {
     var clientId = builder.Configuration["AZURE_CLIENT_ID"];
     var credOptions = new DefaultAzureCredentialOptions();
@@ -65,9 +65,11 @@ builder.Services.AddSingleton(_ =>
     {
         credOptions.ManagedIdentityClientId = clientId;
     }
-    return new LogsQueryClient(new DefaultAzureCredential(credOptions));
+    return new DefaultAzureCredential(credOptions);
 });
+builder.Services.AddSingleton(sp => new LogsQueryClient(sp.GetRequiredService<Azure.Core.TokenCredential>()));
 builder.Services.AddSingleton<AuditQueryService>();
+builder.Services.AddSingleton<CruscottoTelemetryService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<CapabilityRegistry>();
 builder.Services.AddSingleton<WipeScheduleService>();

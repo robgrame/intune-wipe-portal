@@ -1,3 +1,4 @@
+using IntuneWipePortal.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -5,85 +6,54 @@ namespace IntuneWipePortal.Controllers;
 
 /// <summary>
 /// Cruscotto operativo — backend API consumata dalla pagina Razor
-/// <c>/cruscotto</c>. <b>Stub implementation</b>: ritorna shape JSON
-/// corretto ma con dati placeholder cosicché la UI renderizzi. TODO:
-/// portare la logica reale (ServiceBus admin + Storage ledger + KQL su
-/// LAW) sfruttando il <c>LogsQueryClient</c> e <c>DefaultAzureCredential</c>
-/// già configurati in <c>Program.cs</c>. Single source of truth dei DTO è
-/// <c>src/Web/Dashboard/DashboardTelemetryService.cs</c> nel repo
-/// <c>intune-wipe-api</c>.
+/// <c>/cruscotto</c>. Delega tutto a <see cref="CruscottoTelemetryService"/>
+/// che parla con ServiceBus admin, blob ledger e KQL (LAW) tramite la UAMI
+/// del portale.
+///
+/// <para>Reset del ledger NON implementato qui: l'operazione resta esposta
+/// dall'endpoint admin del Web Function App lato API (mTLS + thumbprint
+/// allow-list) per preservare la separazione di responsabilità.</para>
 /// </summary>
 [ApiController]
 [Route("api/cruscotto")]
 [Authorize(Policy = "CanRead")]
 public sealed class CruscottoController : ControllerBase
 {
+    private readonly CruscottoTelemetryService _svc;
+    public CruscottoController(CruscottoTelemetryService svc) => _svc = svc;
+
     [HttpGet("data")]
-    public IActionResult Data() => Ok(new
-    {
-        generatedAt = DateTimeOffset.UtcNow,
-        queues = new[]
-        {
-            QueueStub("action-requests"), QueueStub("action-dispatch"),
-            QueueStub("wipe-action"),     QueueStub("autopilot-action"),
-            QueueStub("bitlocker-action"),QueueStub("rename-action"),
-        },
-        ledger = new
-        {
-            status = "gray", totalEntries = 0, stuckEntries = 0,
-            oldestStuckIssuedAt = (DateTimeOffset?)null,
-            oldestStuckIntuneDeviceId = (string?)null,
-            topStuck = Array.Empty<object>(),
-            graceHours = 4.0,
-        },
-        diagnostics = new
-        {
-            pollerLastTick = (DateTimeOffset?)null,
-            pollerHealth = "Unknown",
-            capabilityLastSeen = new Dictionary<string, DateTimeOffset?>(),
-            issues = new[] { "Backend stub attivo — wirare CruscottoController alle sorgenti reali (SB admin + Storage + KQL)." },
-            kqlAvailable = false,
-        },
-        warnings = Array.Empty<string>(),
-    });
+    public async Task<IActionResult> Data(CancellationToken ct)
+        => Ok(await _svc.SnapshotAsync(ct));
 
     [HttpGet("trace")]
-    public IActionResult Trace([FromQuery] string corr) => Ok(new
+    public async Task<IActionResult> Trace([FromQuery] string corr, CancellationToken ct)
     {
-        correlationId = corr,
-        deviceName = (string?)null,
-        intuneDeviceId = (string?)null,
-        events = Array.Empty<object>(),
-        ledgerSummary = (object?)null,
-        recommendation = new
-        {
-            severity = "muted",
-            title = "Backend stub attivo",
-            detail = "Il portale non è ancora wirato al backend reale. Implementare TraceByCorrelationAsync (KQL su AppEvents+AppExceptions) in CruscottoController.",
-            actionKind = "none",
-            actionPayload = (string?)null,
-        },
-    });
+        if (string.IsNullOrWhiteSpace(corr))
+            return BadRequest(new { message = "Query parameter 'corr' is required." });
+        return Ok(await _svc.TraceByCorrelationAsync(corr, ct));
+    }
 
     [HttpGet("device")]
-    public IActionResult Device([FromQuery] string q, [FromQuery] int take = 25)
-        => Ok(new { device = q, rows = Array.Empty<object>() });
+    public async Task<IActionResult> Device([FromQuery] string q, [FromQuery] int take = 25, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return BadRequest(new { message = "Query parameter 'q' is required." });
+        var rows = await _svc.RecentByDeviceAsync(q, take, ct);
+        return Ok(new { device = q, rows });
+    }
 
     [HttpPost("actions/reset-ledger")]
-    [Authorize(Policy = "CanScheduleWrite")] // reset = scrittura, richiede ruolo Operator
+    [Authorize(Policy = "CanScheduleWrite")]
     public IActionResult ResetLedger([FromBody] ResetBody body)
     {
         if (body is null || string.IsNullOrWhiteSpace(body.IntuneDeviceId) || string.IsNullOrWhiteSpace(body.Reason))
             return BadRequest(new { message = "'intuneDeviceId' e 'reason' sono richiesti" });
-        return StatusCode(501, new { message = "Backend stub: implementare il reset chiamando ActionIdempotencyService.ResetAsync via SDK Storage." });
+        return StatusCode(501, new
+        {
+            message = "Reset ledger non implementato dal portale. Usare l'endpoint admin del Web Function API (mTLS) per preservare la separazione di responsabilità.",
+        });
     }
 
     public sealed record ResetBody(string? IntuneDeviceId, string? Reason);
-
-    private static object QueueStub(string name) => new
-    {
-        name, active = 0L, deadLetter = 0L, scheduled = 0L,
-        accessedAt = (DateTimeOffset?)null,
-        status = "gray", error = (string?)null,
-    };
 }
