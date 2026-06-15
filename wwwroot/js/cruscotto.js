@@ -151,7 +151,10 @@
     }
     for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => showTab(t.dataset.tab));
 
-    const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    // Accetta sia GUID classico (8-4-4-4-12) sia formato compatto "N" (32 hex
+    // senza trattini) che e' quello effettivamente generato dall'API server
+    // tramite Guid.NewGuid().ToString("N").
+    const GUID_RE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})$/i;
 
     document.getElementById('btnTrace').addEventListener('click', () => {
       const q = document.getElementById('searchInput').value.trim();
