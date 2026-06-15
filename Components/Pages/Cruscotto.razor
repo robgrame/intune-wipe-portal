@@ -1,0 +1,189 @@
+@page "/cruscotto"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanRead")]
+@*
+    Cruscotto operativo "flow of energy" — visualizza il flusso dei messaggi
+    lungo la pipeline IntuneDeviceActions. Pagina static-rendered: tutta la
+    logica vive nel JS che fa polling di /api/cruscotto/data ogni 5s e on-
+    demand /trace, /device, /actions/reset-ledger. Il backend è il
+    CruscottoController qui sotto, che chiama le sorgenti reali
+    (ServiceBus admin, Storage ledger, KQL su LAW) usando la managed
+    identity del portale — niente mTLS verso la Web Function App.
+*@
+
+<HeadContent>
+    <link rel="stylesheet" href="@Assets["css/cruscotto.css"]" />
+</HeadContent>
+
+<PageTitle>Cruscotto pipeline</PageTitle>
+
+<header>
+    <h1>IntuneDeviceActions <span class="sub">— cruscotto operativo</span></h1>
+    <div class="meta"><span class="dot" id="liveDot"></span><span id="lastUpdate">in caricamento…</span></div>
+</header>
+
+<main>
+    <div class="searchbar">
+        <input id="searchInput" type="text" placeholder="correlationId GUID, intuneDeviceId GUID, oppure hostname (es. FC1DSK005)" autofocus />
+        <button id="btnTrace">🔍 Traccia</button>
+        <button id="btnDevice" class="secondary">Storico device</button>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="overview">📊 Panoramica</div>
+        <div class="tab" data-tab="trace">🔎 Trace</div>
+    </div>
+
+    <div class="tabpane active" id="tab-overview">
+        <div class="grid">
+            <section class="panel">
+                <h2>Flusso messaggi</h2>
+                <svg id="flow" viewBox="0 0 980 640" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M0 0 L10 5 L0 10 z" fill="var(--edge)" />
+                        </marker>
+                        <marker id="arrowLive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)" opacity=".6" />
+                        </marker>
+                        <path id="p-client-web"     d="M 490 30  L 490 90" />
+                        <path id="p-web-areq"       d="M 490 130 L 490 180" />
+                        <path id="p-areq-proc"      d="M 490 220 L 490 270" />
+                        <path id="p-proc-disp"      d="M 490 310 L 490 360" />
+                        <path id="p-disp-wipe"      d="M 460 400 Q 200 430 200 450" />
+                        <path id="p-disp-autopilot" d="M 480 400 Q 380 430 380 450" />
+                        <path id="p-disp-bitlocker" d="M 500 400 Q 600 430 600 450" />
+                        <path id="p-disp-rename"    d="M 520 400 Q 800 430 800 450" />
+                        <path id="p-wipe-graph"     d="M 200 510 Q 350 580 480 580" />
+                        <path id="p-autop-graph"    d="M 380 510 Q 420 560 480 580" />
+                        <path id="p-bitl-graph"     d="M 600 510 Q 560 560 500 580" />
+                        <path id="p-renm-graph"     d="M 800 510 Q 650 580 510 580" />
+                    </defs>
+                    <use id="e-client-web"     class="edge" href="#p-client-web"     marker-end="url(#arrow)" />
+                    <use id="e-web-areq"       class="edge" href="#p-web-areq"       marker-end="url(#arrow)" />
+                    <use id="e-areq-proc"      class="edge" href="#p-areq-proc"      marker-end="url(#arrow)" />
+                    <use id="e-proc-disp"      class="edge" href="#p-proc-disp"      marker-end="url(#arrow)" />
+                    <use id="e-disp-wipe"      class="edge" href="#p-disp-wipe"      marker-end="url(#arrow)" />
+                    <use id="e-disp-autopilot" class="edge" href="#p-disp-autopilot" marker-end="url(#arrow)" />
+                    <use id="e-disp-bitlocker" class="edge" href="#p-disp-bitlocker" marker-end="url(#arrow)" />
+                    <use id="e-disp-rename"    class="edge" href="#p-disp-rename"    marker-end="url(#arrow)" />
+                    <use id="e-wipe-graph"     class="edge" href="#p-wipe-graph"     marker-end="url(#arrow)" />
+                    <use id="e-autop-graph"    class="edge" href="#p-autop-graph"    marker-end="url(#arrow)" />
+                    <use id="e-bitl-graph"     class="edge" href="#p-bitl-graph"     marker-end="url(#arrow)" />
+                    <use id="e-renm-graph"     class="edge" href="#p-renm-graph"     marker-end="url(#arrow)" />
+
+                    <circle id="part-web-areq"       class="particle hidden" r="5"><animateMotion dur="2s"   repeatCount="indefinite"><mpath href="#p-web-areq" /></animateMotion></circle>
+                    <circle id="part-areq-proc"      class="particle hidden" r="5"><animateMotion dur="2s"   repeatCount="indefinite"><mpath href="#p-areq-proc" /></animateMotion></circle>
+                    <circle id="part-proc-disp"      class="particle hidden" r="5"><animateMotion dur="2s"   repeatCount="indefinite"><mpath href="#p-proc-disp" /></animateMotion></circle>
+                    <circle id="part-disp-wipe"      class="particle hidden" r="5"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#p-disp-wipe" /></animateMotion></circle>
+                    <circle id="part-disp-autopilot" class="particle hidden" r="5"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#p-disp-autopilot" /></animateMotion></circle>
+                    <circle id="part-disp-bitlocker" class="particle hidden" r="5"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#p-disp-bitlocker" /></animateMotion></circle>
+                    <circle id="part-disp-rename"    class="particle hidden" r="5"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#p-disp-rename" /></animateMotion></circle>
+
+                    <g class="node gray" id="n-client" transform="translate(420,0)">
+                        <rect width="140" height="32" rx="6" /><text class="title" x="70" y="20" text-anchor="middle">Client mTLS</text>
+                    </g>
+                    <g class="node green" id="n-web" transform="translate(420,90)">
+                        <rect width="140" height="44" rx="6" />
+                        <text class="title" x="70" y="20" text-anchor="middle">Web (intake)</text>
+                        <text class="metric" x="70" y="36" text-anchor="middle" id="m-web">—</text>
+                    </g>
+                    <g class="node green" id="n-areq" transform="translate(410,180)">
+                        <rect width="160" height="44" rx="6" />
+                        <text class="title" x="80" y="20" text-anchor="middle">SB action-requests</text>
+                        <text class="metric" x="80" y="36" text-anchor="middle" id="m-areq">—</text>
+                    </g>
+                    <g class="node green" id="n-proc" transform="translate(420,270)">
+                        <rect width="140" height="44" rx="6" />
+                        <text class="title" x="70" y="20" text-anchor="middle">Proc dispatcher</text>
+                        <text class="metric" x="70" y="36" text-anchor="middle" id="m-proc">—</text>
+                    </g>
+                    <g class="node green" id="n-disp" transform="translate(410,360)">
+                        <rect width="160" height="44" rx="6" />
+                        <text class="title" x="80" y="20" text-anchor="middle">SB action-dispatch</text>
+                        <text class="metric" x="80" y="36" text-anchor="middle" id="m-disp">—</text>
+                    </g>
+                    <g class="node green" id="n-wipe" transform="translate(130,450)">
+                        <rect width="140" height="60" rx="6" />
+                        <text class="title" x="70" y="22" text-anchor="middle">Wipe</text>
+                        <text class="metric" x="70" y="40" text-anchor="middle" id="m-wipe">—</text>
+                        <text class="metric" x="70" y="54" text-anchor="middle" id="m-wipe2">—</text>
+                    </g>
+                    <g class="node green" id="n-autopilot" transform="translate(310,450)">
+                        <rect width="140" height="60" rx="6" />
+                        <text class="title" x="70" y="22" text-anchor="middle">Autopilot</text>
+                        <text class="metric" x="70" y="40" text-anchor="middle" id="m-autopilot">—</text>
+                        <text class="metric" x="70" y="54" text-anchor="middle" id="m-autopilot2">—</text>
+                    </g>
+                    <g class="node green" id="n-bitlocker" transform="translate(530,450)">
+                        <rect width="140" height="60" rx="6" />
+                        <text class="title" x="70" y="22" text-anchor="middle">BitLocker</text>
+                        <text class="metric" x="70" y="40" text-anchor="middle" id="m-bitlocker">—</text>
+                        <text class="metric" x="70" y="54" text-anchor="middle" id="m-bitlocker2">—</text>
+                    </g>
+                    <g class="node gray" id="n-rename" transform="translate(730,450)">
+                        <rect width="140" height="60" rx="6" />
+                        <text class="title" x="70" y="22" text-anchor="middle">Rename</text>
+                        <text class="metric" x="70" y="40" text-anchor="middle" id="m-rename">—</text>
+                        <text class="metric" x="70" y="54" text-anchor="middle" id="m-rename2">—</text>
+                    </g>
+                    <g class="node gray" id="n-graph" transform="translate(420,590)">
+                        <rect width="140" height="32" rx="6" />
+                        <text class="title" x="70" y="20" text-anchor="middle">Microsoft Graph</text>
+                    </g>
+                </svg>
+            </section>
+
+            <aside style="display:flex; flex-direction:column; gap:14px;">
+                <div class="panel">
+                    <h2>Ledger idempotency</h2>
+                    <table class="kv">
+                        <tr><th>Stato</th><td><span id="ledgerPill" class="pill gray">—</span></td></tr>
+                        <tr><th>Entries totali</th><td id="ledgerTotal">—</td></tr>
+                        <tr><th>Bloccate (stuck)</th><td id="ledgerStuck">—</td></tr>
+                        <tr><th>Più vecchia stuck</th><td id="ledgerOldest">—</td></tr>
+                        <tr><th>Grace period</th><td id="ledgerGrace">—</td></tr>
+                    </table>
+                </div>
+                <div class="panel">
+                    <h2>Code Service Bus</h2>
+                    <table class="kv" id="queueTable">
+                        <tr><th>Coda</th><th>Att.</th><th>DLQ</th></tr>
+                    </table>
+                </div>
+                <div class="panel">
+                    <h2>Diagnostica componenti</h2>
+                    <div id="diagBody"><div class="empty">in caricamento…</div></div>
+                </div>
+                <div class="panel">
+                    <h2>Ledger bloccate (azioni rapide)</h2>
+                    <div id="stuckList"><div class="empty">nessuna entry bloccata</div></div>
+                </div>
+                <div class="panel">
+                    <h2>Warnings</h2>
+                    <div class="warnings" id="warnings"><div class="empty">nessun warning</div></div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div class="tabpane" id="tab-trace">
+        <div id="traceReco"></div>
+        <div class="panel">
+            <h2>Timeline evento per evento</h2>
+            <div id="traceMeta" class="empty">Esegui una ricerca per vedere la timeline di una richiesta.</div>
+            <div id="timeline" class="timeline"></div>
+        </div>
+        <div class="panel" style="margin-top:14px;">
+            <h2>Stato ledger per il device</h2>
+            <table class="kv" id="traceLedger"><tr><td class="empty">—</td></tr></table>
+        </div>
+        <div class="panel" style="margin-top:14px;" id="devicePanel" hidden>
+            <h2>Richieste recenti per questo device</h2>
+            <div id="deviceRows" class="device-rows"></div>
+        </div>
+    </div>
+</main>
+
+<footer>Refresh ogni <span id="refreshSec">5</span>s · sorgenti: ServiceBus admin + Ledger blob + KQL (App Insights) · portale operatore</footer>
+
+<script src="@Assets["js/cruscotto.js"]"></script>
