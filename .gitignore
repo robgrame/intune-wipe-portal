@@ -7,3 +7,5 @@ publish/
 publish.zip
 weblogs*/
 webapp-logs*.zip
+
+dist/
