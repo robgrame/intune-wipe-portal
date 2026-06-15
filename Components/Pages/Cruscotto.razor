@@ -167,13 +167,25 @@
     </div>
 
     <div class="tabpane" id="tab-trace">
+        <div id="traceEmpty" class="panel" style="text-align:center; padding:28px 18px;">
+            <div style="font-size:32px; line-height:1; margin-bottom:8px;">🔎</div>
+            <h2 style="margin:0 0 6px 0;">Cerca una richiesta</h2>
+            <div class="empty" style="max-width:560px; margin:0 auto;">
+                Inserisci nella barra di ricerca in alto:
+                <ul style="text-align:left; display:inline-block; margin:8px 0 0 0;">
+                    <li>un <b>correlationId</b> (GUID) per vedere la timeline puntuale</li>
+                    <li>un <b>intuneDeviceId</b> o un <b>hostname</b> per vedere lo storico richieste del device</li>
+                </ul>
+                <div style="margin-top:10px;">Premi poi <kbd>Invio</kbd> o il pulsante <b>Trace</b>.</div>
+            </div>
+        </div>
         <div id="traceReco"></div>
-        <div class="panel">
+        <div class="panel" id="tracePanelTimeline" hidden>
             <h2>Timeline evento per evento</h2>
             <div id="traceMeta" class="empty">Esegui una ricerca per vedere la timeline di una richiesta.</div>
             <div id="timeline" class="timeline"></div>
         </div>
-        <div class="panel" style="margin-top:14px;">
+        <div class="panel" id="tracePanelLedger" style="margin-top:14px;" hidden>
             <h2>Stato ledger per il device</h2>
             <table class="kv" id="traceLedger"><tr><td class="empty">—</td></tr></table>
         </div>

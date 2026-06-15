@@ -144,6 +144,11 @@
       for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t.dataset.tab === name);
       for (const p of document.querySelectorAll('.tabpane')) p.classList.toggle('active', p.id === 'tab-' + name);
     }
+    function hideTraceEmpty() {
+      const e = document.getElementById('traceEmpty'); if (e) e.hidden = true;
+      const t = document.getElementById('tracePanelTimeline'); if (t) t.hidden = false;
+      const l = document.getElementById('tracePanelLedger'); if (l) l.hidden = false;
+    }
     for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => showTab(t.dataset.tab));
 
     const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -164,6 +169,7 @@
 
     async function traceByCorr(corr) {
       showTab('trace');
+      hideTraceEmpty();
       document.getElementById('traceMeta').textContent = 'caricamento…';
       document.getElementById('traceReco').innerHTML = '';
       document.getElementById('timeline').innerHTML = '';
@@ -179,6 +185,7 @@
 
     async function recentByDevice(q) {
       showTab('trace');
+      hideTraceEmpty();
       document.getElementById('traceMeta').textContent = 'caricamento storico device…';
       document.getElementById('traceReco').innerHTML = '';
       document.getElementById('timeline').innerHTML = '';
