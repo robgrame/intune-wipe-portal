@@ -52,7 +52,15 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddControllersWithViews()
-    .AddMicrosoftIdentityUI();
+    .AddMicrosoftIdentityUI()
+    .AddJsonOptions(o =>
+    {
+        // Serializza enum (NodeHealth, ...) come stringhe ("Green", "Yellow", ...)
+        // altrimenti il JS lato cruscotto chiama .toLowerCase() su un numero e
+        // crash con "(status || \"\").toLowerCase is not a function".
+        o.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 
 // --- App Insights / Log Analytics client. DefaultAzureCredential will pick up
 // the user-assigned managed identity in Azure via AZURE_CLIENT_ID; in dev it
