@@ -12,10 +12,11 @@
     .meta .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:6px; vertical-align:middle; }
     main { padding:18px 22px; }
     .grid { display:grid; grid-template-columns: 1fr 320px; gap:18px; align-items:start; }
+    .detail-grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; margin-top:18px; align-items:start; }
     .panel { background:var(--panel); border:1px solid var(--edge); border-radius:8px; padding:12px 14px; }
     .panel h2 { margin:0 0 10px; font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
     .warnings { display:flex; flex-direction:column; gap:6px; }
-    .warn { background:rgba(248,81,73,.08); border-left:3px solid var(--red); padding:8px 10px; border-radius:4px; font-size:13px; }
+    .warn { background:rgba(248,81,73,.08); border-left:3px solid var(--red); padding:10px 12px; border-radius:4px; font-size:13px; line-height:1.45; }
     .warn.warn-yellow { background:rgba(210,153,34,.08); border-left-color:var(--yellow); }
     .empty { color:var(--muted); font-style:italic; }
     svg { width:100%; height:auto; display:block; }
@@ -96,10 +97,12 @@
     .diag-line .v.red { color:var(--red); }
 
     /* Stuck list */
-    .stuck-row { display:grid; grid-template-columns:1fr auto; gap:6px; padding:6px 8px; background:#0b0f14; border-radius:4px; margin-bottom:4px; font-size:12px; align-items:center; }
+    #stuckList { max-height:340px; overflow-y:auto; padding-right:4px; }
+    .stuck-row { display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 10px; background:#0b0f14; border-radius:4px; margin-bottom:6px; font-size:12px; align-items:center; }
     .stuck-row code { color:var(--accent); font-size:11px; }
     .stuck-row .age { color:var(--yellow); font-size:11px; }
-    .stuck-row button { padding:3px 8px; background:var(--red); color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:11px; }
+    .stuck-row .issued { color:var(--muted); font-size:11px; margin-top:2px; }
+    .stuck-row button { padding:4px 10px; background:var(--red); color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:11px; }
     .stuck-row button:hover { filter:brightness(1.2); }
 
     /* Tab toggle */
@@ -108,3 +111,8 @@
     .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
     .tabpane { display:none; }
     .tabpane.active { display:block; }
+
+    @media (max-width: 1200px) {
+      .grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }

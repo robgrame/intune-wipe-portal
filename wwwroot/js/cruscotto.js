@@ -290,14 +290,16 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">nessuna entry bloccata</div>'; return; }
       el.innerHTML = '';
       for (const r of rows) {
+        const issuedAt = r.issuedAt ? new Date(r.issuedAt).toLocaleString() : '—';
         const div = document.createElement('div');
         div.className = 'stuck-row';
         div.innerHTML = `
           <div>
             <div><code>${escapeHtml(r.intuneDeviceId)}</code></div>
-            <div class="age">stuck da ${r.ageHours.toFixed(1)} h · corr ${escapeHtml(r.correlationId.substring(0,8))}…</div>
+            <div class="age">stuck da ${r.ageHours.toFixed(1)} h</div>
+            <div class="issued">issued ${escapeHtml(issuedAt)} · corr <code>${escapeHtml(r.correlationId)}</code></div>
           </div>
-          <button data-id="${escapeHtml(r.intuneDeviceId)}">Reset</button>`;
+          <button data-id="${escapeHtml(r.intuneDeviceId)}">Reset ledger</button>`;
         div.querySelector('button').addEventListener('click', () => doReset(r.intuneDeviceId));
         el.appendChild(div);
       }

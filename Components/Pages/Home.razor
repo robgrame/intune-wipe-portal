@@ -142,7 +142,27 @@ else
         </table>
     }
 
-    <h2 class="h5 mt-4">Ultimi eventi</h2>
+    <h2 class="h5 mt-4 d-flex justify-content-between align-items-center">
+        <span>Cruscotto operativo</span>
+        <a class="btn btn-sm btn-outline-secondary" href="/cruscotto" data-enhance-nav="false">Apri vista completa</a>
+    </h2>
+    <details class="mb-3">
+        <summary>Apri il cruscotto dentro la home</summary>
+        <div class="mt-2" style="border:1px solid #dee2e6; border-radius:.5rem; overflow:hidden;">
+            <iframe
+                src="/cruscotto"
+                title="Cruscotto operativo"
+                loading="lazy"
+                style="width:100%; min-height:900px; border:0;"
+                referrerpolicy="no-referrer">
+            </iframe>
+        </div>
+    </details>
+
+    <h2 class="h5 mt-4 d-flex justify-content-between align-items-center">
+        <span>Ultimi eventi</span>
+        <small class="text-muted">ultime 20 entry logiche</small>
+    </h2>
     @if (_recent is null || _recent.Count == 0)
     {
         <p class="text-muted">Nessun evento.</p>
@@ -165,7 +185,41 @@ else
             {
                 <tr>
                     <td>@e.Timestamp.UtcDateTime.ToString("u")</td>
-                    <td><code>@e.EventName</code></td>
+                    <td>
+                        @if (e.IsCollapsedGroup)
+                        {
+                            <details>
+                                <summary><code>@e.EventName</code></summary>
+                                <div class="small text-muted mt-1">
+                                    @e.Reason
+                                </div>
+                                @if (e.GroupedEvents is { Count: > 0 } grouped)
+                                {
+                                    <table class="table table-sm mb-0 mt-2">
+                                        <thead>
+                                            <tr>
+                                                <th>Timestamp (UTC)</th>
+                                                <th>Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        @foreach (var ge in grouped.Take(25))
+                                        {
+                                            <tr>
+                                                <td>@ge.Timestamp.UtcDateTime.ToString("u")</td>
+                                                <td>@(ge.Reason ?? "-")</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                }
+                            </details>
+                        }
+                        else
+                        {
+                            <code>@e.EventName</code>
+                        }
+                    </td>
                     <td>@(e.ActionType ?? "-")</td>
                     <td>@(e.DeviceName ?? "-")</td>
                     <td>@(e.Reason ?? "-")</td>
@@ -187,7 +241,7 @@ else
     private CapabilityDescriptor _capability = CapabilityDescriptor.All;
     private KpiSummary? _kpis;
     private IReadOnlyList<DenyBreakdownRow>? _denies;
-    private IReadOnlyList<AuditEventRow>? _recent;
+    private IReadOnlyList<RecentEventDisplayRow>? _recent;
     private IReadOnlyList<InFlightActionRow>? _inFlight;
     private string? _loadError;
     private System.Threading.Timer? _timer;
@@ -221,7 +275,8 @@ else
             var window = TimeSpan.FromHours(24);
             _kpis     = await Audit.GetKpisAsync(window, _capability, default);
             _denies   = await Audit.GetDenyBreakdownAsync(window, _capability, default);
-            _recent   = await Audit.GetRecentEventsAsync(100, window, _capability, default);
+            var recentRaw = await Audit.GetRecentEventsAsync(120, window, _capability, default);
+            _recent   = BuildRecentDisplayRows(recentRaw, 20);
             _inFlight = await Audit.GetInFlightActionsAsync(window, _capability, default);
             _loadError = null;
         }
@@ -243,6 +298,79 @@ else
                 </div>
             </div>");
     };
+
+    private static IReadOnlyList<RecentEventDisplayRow> BuildRecentDisplayRows(IReadOnlyList<AuditEventRow> recentRaw, int take)
+    {
+        var rows = new List<RecentEventDisplayRow>(recentRaw.Count);
+        var groupedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var stateObservedGroups = recentRaw
+            .Where(e => e.EventName == "action.state-observed")
+            .GroupBy(StateObservedGroupKey)
+            .Where(g => g.Count() > 1);
+
+        foreach (var group in stateObservedGroups)
+        {
+            var events = group.OrderByDescending(e => e.Timestamp).ToArray();
+            groupedKeys.Add(group.Key);
+
+            var newest = events[0];
+            var oldest = events[^1];
+            var summary = $"{events.Length} osservazioni stato tra {oldest.Timestamp.UtcDateTime:u} e {newest.Timestamp.UtcDateTime:u}";
+
+            rows.Add(new RecentEventDisplayRow(
+                Timestamp: newest.Timestamp,
+                EventName: $"action.state-observed × {events.Length}",
+                CorrelationId: newest.CorrelationId,
+                ActionType: newest.ActionType,
+                DeviceName: newest.DeviceName,
+                Reason: summary,
+                IsCollapsedGroup: true,
+                GroupedEvents: events));
+        }
+
+        foreach (var e in recentRaw)
+        {
+            if (e.EventName == "action.state-observed" && groupedKeys.Contains(StateObservedGroupKey(e)))
+                continue;
+
+            rows.Add(new RecentEventDisplayRow(
+                Timestamp: e.Timestamp,
+                EventName: e.EventName,
+                CorrelationId: e.CorrelationId,
+                ActionType: e.ActionType,
+                DeviceName: e.DeviceName,
+                Reason: e.Reason,
+                IsCollapsedGroup: false,
+                GroupedEvents: null));
+        }
+
+        return rows
+            .OrderByDescending(e => e.Timestamp)
+            .Take(take)
+            .ToArray();
+    }
+
+    private static string StateObservedGroupKey(AuditEventRow e)
+    {
+        if (!string.IsNullOrWhiteSpace(e.CorrelationId))
+            return $"corr:{e.CorrelationId}";
+
+        if (!string.IsNullOrWhiteSpace(e.IntuneDeviceId))
+            return $"intune:{e.IntuneDeviceId}";
+
+        return $"device:{e.DeviceName ?? "-"}|action:{e.ActionType ?? "-"}";
+    }
+
+    private sealed record RecentEventDisplayRow(
+        DateTimeOffset Timestamp,
+        string EventName,
+        string CorrelationId,
+        string? ActionType,
+        string? DeviceName,
+        string? Reason,
+        bool IsCollapsedGroup,
+        IReadOnlyList<AuditEventRow>? GroupedEvents);
 
     public void Dispose() => _timer?.Dispose();
 }
