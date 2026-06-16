@@ -264,7 +264,8 @@ public sealed class CruscottoTelemetryService
             Queues: queues,
             Ledger: ledger,
             Diagnostics: diag,
-            Warnings: warnings.ToArray());
+            Warnings: warnings.ToArray(),
+            DeniedRequests: _metricsCollector.GetDeniedEvents());
     }
 
     private async Task<IReadOnlyList<QueueStatus>> LoadQueuesAsync(CancellationToken ct)
@@ -810,7 +811,8 @@ public sealed record DashboardSnapshot(
     IReadOnlyList<QueueStatus> Queues,
     LedgerStatus Ledger,
     DiagnosticsStatus Diagnostics,
-    string[] Warnings);
+    string[] Warnings,
+    IReadOnlyList<DeniedEvent> DeniedRequests);
 
 public sealed record QueueStatus(
     string Name, long Active, long DeadLetter, long Scheduled,

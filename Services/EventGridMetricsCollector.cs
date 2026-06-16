@@ -25,6 +25,8 @@ public sealed class EventGridMetricsCollector
             _buckets.GetOrAdd(role, _ => new AppMetricsBucket());
     }
 
+    private readonly ConcurrentQueue<DeniedEvent> _deniedEvents = new();
+
     /// <summary>
     /// Ingest a raw Event Grid event payload (array of events).
     /// Each event's <c>data</c> is expected to carry an <c>AuditStreamEnvelope</c>
@@ -49,7 +51,42 @@ public sealed class EventGridMetricsCollector
 
             var bucket = _buckets.GetOrAdd(role, _ => new AppMetricsBucket());
             bucket.Record(eventName, isError);
+
+            // Track denied events for the "recycle bin"
+            if (eventName is not null && eventName.Contains("denied", StringComparison.OrdinalIgnoreCase))
+            {
+                var props = data.TryGetProperty("properties", out var p) ? p : default;
+                var device = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("deviceName", out var dn) ? dn.GetString() : null;
+                var corr = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("correlationId", out var cr) ? cr.GetString() : null;
+                var reason = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("reason", out var rn) ? rn.GetString() : null;
+                var actionType = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("actionType", out var at) ? at.GetString() : null;
+
+                _deniedEvents.Enqueue(new DeniedEvent(
+                    Timestamp: DateTimeOffset.UtcNow,
+                    EventName: eventName,
+                    Role: role!,
+                    DeviceName: device,
+                    CorrelationId: corr,
+                    Reason: reason ?? eventName,
+                    ActionType: actionType));
+
+                // Prune denied events older than 60 min
+                var pruneThreshold = DateTimeOffset.UtcNow.AddMinutes(-60);
+                while (_deniedEvents.TryPeek(out var oldest) && oldest.Timestamp < pruneThreshold)
+                    _deniedEvents.TryDequeue(out _);
+            }
         }
+    }
+
+    /// <summary>
+    /// Returns denied events from the last 60 minutes, newest first.
+    /// </summary>
+    public IReadOnlyList<DeniedEvent> GetDeniedEvents()
+    {
+        return _deniedEvents
+            .Where(e => e.Timestamp > DateTimeOffset.UtcNow.AddMinutes(-60))
+            .OrderByDescending(e => e.Timestamp)
+            .ToList();
     }
 
     /// <summary>
@@ -124,3 +161,12 @@ public sealed class EventGridMetricsCollector
         private readonly record struct EventTick(DateTimeOffset Timestamp, bool IsError);
     }
 }
+
+public record DeniedEvent(
+    DateTimeOffset Timestamp,
+    string EventName,
+    string Role,
+    string? DeviceName,
+    string? CorrelationId,
+    string Reason,
+    string? ActionType);

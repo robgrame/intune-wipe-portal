@@ -98,21 +98,25 @@
 
       // Warnings
       const wEl = document.getElementById('warnings');
-      const ws = data.warnings || [];
+      const ws = [...(data.warnings || [])];
+      const denied = data.deniedRequests || [];
+      if (denied.length > 0) {
+        ws.unshift(`\u{1F5D1} ${denied.length} richiesta/e NEGATA/E nell'ultima ora (click sul nodo Denied per dettagli)`);
+      }
       if (ws.length === 0) {
         wEl.innerHTML = '<div class="empty">nessun warning</div>';
       } else {
         wEl.innerHTML = '';
         for (const w of ws) {
           const d = document.createElement('div');
-          d.className = 'warn' + (w.startsWith('Queue') && w.includes('backlog') ? ' warn-yellow' : '');
+          d.className = 'warn' + (w.startsWith('Queue') && w.includes('backlog') ? ' warn-yellow' : w.includes('NEGATA') ? ' warn-red' : '');
           d.textContent = w;
           wEl.appendChild(d);
         }
       }
 
       // Live dot
-      document.getElementById('liveDot').style.background = ws.length ? 'var(--red)' : 'var(--green)';
+      document.getElementById('liveDot').style.background = (ws.length || denied.length) ? 'var(--red)' : 'var(--green)';
 
       renderDiagnostics(data.diagnostics);
       renderStuckList(L.topStuck || []);
@@ -289,6 +293,42 @@
       // Nodes — disegnati DOPO le frecce così sono sopra
       for (const s of top) svg.appendChild(fdBox(s, s.queue ? byName[s.queue] : null));
       for (const s of bot) svg.appendChild(fdBox(s, s.queue ? byName[s.queue] : null));
+
+      // ─── Denied / Recycle Bin node ────────────────────────────────
+      const denied = data.deniedRequests || [];
+      const deniedSpec = { id:'denied', x:20, y:410, label:'\u{1F5D1} Denied', sub:'richieste negate' };
+      const deniedCount = denied.length;
+      const deniedStatus = deniedCount > 0 ? 'red' : 'gray';
+      const dc = fdColors(deniedStatus);
+      const dg = fdEl('g');
+      dg.setAttribute('data-component', 'denied-bin');
+      dg.setAttribute('style', 'cursor:pointer');
+      dg.appendChild(fdEl('rect', {
+        x: deniedSpec.x, y: deniedSpec.y, width: FD_NODE_W, height: FD_NODE_H,
+        rx: 8, ry: 8, fill: dc.fill, stroke: dc.stroke, 'stroke-width': 2,
+        'stroke-dasharray': deniedCount > 0 ? '' : '4 3'
+      }));
+      dg.appendChild(fdText(deniedSpec.x + FD_NODE_W/2, deniedSpec.y + 20, deniedSpec.label, { weight:600, fill: dc.text }));
+      dg.appendChild(fdText(deniedSpec.x + FD_NODE_W/2, deniedSpec.y + 42, deniedCount > 0 ? `${deniedCount} negata/e (1h)` : 'nessuna', { size:13, weight:700, fill: dc.text }));
+      dg.appendChild(fdText(deniedSpec.x + FD_NODE_W/2, deniedSpec.y + 62, deniedSpec.sub, { size:10, fill:'#6b7280' }));
+      svg.appendChild(dg);
+
+      // Arrow from Proc → Denied (dashed, side exit)
+      if (deniedCount > 0) {
+        const procSpec = top[2]; // Proc
+        const x1 = procSpec.x + FD_NODE_W / 2;
+        const y1 = FD_TOP_Y + FD_NODE_H;
+        const x2 = deniedSpec.x + FD_NODE_W / 2;
+        const y2 = deniedSpec.y;
+        const midY = (y1 + y2) / 2 + 30;
+        const pts = `${x1},${y1} ${x1},${midY} ${x2},${midY} ${x2},${y2}`;
+        const arrow = fdEl('polyline', {
+          points: pts, fill:'none', stroke: '#dc2626', 'stroke-width': 2,
+          'stroke-dasharray': '6 3',
+          'marker-end': 'url(#fd-arrow-err)', 'stroke-linecap':'round', 'stroke-linejoin':'round'
+        });
+        svg.appendChild(arrow);
+      }
     }
 
     function renderDiagnostics(diag) {
@@ -462,6 +502,36 @@
       const titleEl = document.getElementById('componentModalTitle');
       const bodyEl = document.getElementById('componentModalBody');
       if (!titleEl || !bodyEl) return;
+
+      // Special case: denied bin
+      if (componentKey === 'denied-bin') {
+        titleEl.textContent = '\u{1F5D1} Richieste Negate (Recycle Bin)';
+        selectedComponentKey = 'denied-bin';
+        const denied = latestSnapshot?.deniedRequests || [];
+        if (denied.length === 0) {
+          bodyEl.innerHTML = '<div class="empty">Nessuna richiesta negata nell\'ultima ora.</div>';
+          return;
+        }
+        let html = `<div class="component-detail-status">Totale: <span class="pill red">${denied.length} negata/e</span> nell'ultima ora</div>`;
+        html += '<table class="kv denied-table"><thead><tr><th>Ora</th><th>Device</th><th>Azione</th><th>Motivo</th><th>CorrelationId</th></tr></thead><tbody>';
+        for (const d of denied) {
+          const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '—';
+          const device = d.deviceName || '—';
+          const action = d.actionType || '—';
+          const reason = d.reason || d.eventName || '—';
+          const corr = d.correlationId || '—';
+          html += `<tr>
+            <td>${escapeHtml(time)}</td>
+            <td><code>${escapeHtml(device)}</code></td>
+            <td>${escapeHtml(action)}</td>
+            <td class="text-red">${escapeHtml(reason)}</td>
+            <td><code class="corr-id">${escapeHtml(corr)}</code></td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        bodyEl.innerHTML = html;
+        return;
+      }
 
       const component = COMPONENTS[componentKey] || { key: componentKey, name: componentKey, kind: 'service' };
       titleEl.textContent = component.name;
