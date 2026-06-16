@@ -363,9 +363,12 @@ public sealed class CruscottoTelemetryService
                              device = tostring(Properties.deviceName),
                              intune = tostring(Properties.intuneDeviceId),
                              reason = tostring(Properties.reason),
+                             state = tostring(Properties.state),
+                             terminal = tostring(Properties.terminalState),
+                             rawStatus = tostring(Properties.rawStatus),
                              rearm  = tostring(Properties.rearmReason),
                              origCorr = tostring(Properties.originalCorrelationId)
-                    | project TimeGenerated, evt, role, device, intune, reason, rearm, origCorr
+                    | project TimeGenerated, evt, role, device, intune, reason, state, terminal, rawStatus, rearm, origCorr
                     | order by TimeGenerated asc
                     | take 200
                 ";
@@ -380,8 +383,11 @@ public sealed class CruscottoTelemetryService
                         DeviceName: r[3]?.ToString(),
                         IntuneDeviceId: r[4]?.ToString(),
                         Reason: r[5]?.ToString(),
-                        RearmReason: r[6]?.ToString(),
-                        OriginalCorrelationId: r[7]?.ToString());
+                        State: r[6]?.ToString(),
+                        TerminalState: r[7]?.ToString(),
+                        RawStatus: r[8]?.ToString(),
+                        RearmReason: r[9]?.ToString(),
+                        OriginalCorrelationId: r[10]?.ToString());
                 }).ToArray();
             }
             catch (Exception ex)
@@ -628,7 +634,8 @@ public sealed record RequestTrace(
 public sealed record TraceEvent(
     DateTimeOffset Timestamp, string Name, string Role,
     string? DeviceName, string? IntuneDeviceId,
-    string? Reason, string? RearmReason, string? OriginalCorrelationId);
+    string? Reason, string? State, string? TerminalState, string? RawStatus,
+    string? RearmReason, string? OriginalCorrelationId);
 
 public sealed record LedgerSummary(
     string? State, DateTimeOffset? IssuedAt, string? LastTerminalState,

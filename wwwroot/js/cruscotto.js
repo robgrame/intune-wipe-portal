@@ -482,6 +482,9 @@
         if (e.deviceName) extras.push('dev=' + e.deviceName);
         if (e.intuneDeviceId) extras.push('intune=' + e.intuneDeviceId.substring(0,8) + '…');
         if (e.reason) extras.push('reason=' + e.reason);
+        if (e.state) extras.push('state=' + e.state);
+        if (e.terminalState) extras.push('terminal=' + e.terminalState);
+        if (e.rawStatus) extras.push('raw=' + e.rawStatus);
         if (e.rearmReason) extras.push('rearm=' + e.rearmReason);
         if (e.originalCorrelationId) extras.push('orig=' + e.originalCorrelationId.substring(0,8) + '…');
         div.innerHTML = `
