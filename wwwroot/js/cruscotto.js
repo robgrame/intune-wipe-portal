@@ -409,6 +409,36 @@
       const meta = `Correlation: ${escapeHtml(t.correlationId)} · Device: ${escapeHtml(t.deviceName||'—')} · Intune: ${escapeHtml(t.intuneDeviceId||'—')} · ${t.events.length} eventi`;
       document.getElementById('traceMeta').textContent = meta;
 
+      const rawEvents = Array.isArray(t.events) ? t.events : [];
+      const checkpointDefs = [
+        { id:'validated', label:'Validata (request received)', match:e => e.name === 'action.request.received' },
+        { id:'accepted', label:'Accettata', match:e => e.name === 'action.request.accepted' },
+        { id:'dispatch', label:'Presa in carico da Proc', match:e => e.name === 'action.dispatch.received' },
+        { id:'forwarded', label:'Forward verso capability', match:e => e.name === 'action.forwarded' },
+        { id:'consumed', label:'Consumata dal runner wipe', match:e => (e.name||'').endsWith('.action.consumed') },
+        { id:'graph', label:'Richiesta Graph inviata', match:e => (e.name||'').includes('.graph.issued') },
+        { id:'fallback', label:'Fallback attivato (sync/reboot)', match:e => (e.name||'').includes('fallback.issued') },
+        { id:'runnerdone', label:'Runner completato', match:e => (e.name||'').endsWith('.action.completed') },
+        { id:'terminal', label:'Terminale osservato dal poller', match:e => e.name === 'action.completed' }
+      ];
+      const cpRows = checkpointDefs.map(cp => {
+        const ev = rawEvents.find(cp.match);
+        return {
+          label: cp.label,
+          ok: !!ev,
+          at: ev ? new Date(ev.timestamp).toLocaleString() : '—'
+        };
+      });
+      const stateObservedCount = rawEvents.filter(e => e.name === 'action.state-observed').length;
+      const cpHost = document.getElementById('traceCheckpoints');
+      cpHost.className = '';
+      cpHost.innerHTML = `
+        <table class="kv">
+          <tr><th>Checkpoint</th><th>Stato</th><th>Timestamp</th></tr>
+          ${cpRows.map(r => `<tr><td>${escapeHtml(r.label)}</td><td>${r.ok ? '✅' : '—'}</td><td>${escapeHtml(r.at)}</td></tr>`).join('')}
+          <tr><th>state-observed (poller)</th><td colspan="2">${stateObservedCount}</td></tr>
+        </table>`;
+
       // Recommendation banner
       const rec = t.recommendation || { severity:'muted', title:'—', detail:'—', actionKind:'none' };
       const rDiv = document.createElement('div');
@@ -435,7 +465,17 @@
       // Timeline
       const tl = document.getElementById('timeline');
       tl.innerHTML = '';
-      for (const e of t.events) {
+      const observed = rawEvents.filter(e => e.name === 'action.state-observed');
+      const nonObserved = rawEvents.filter(e => e.name !== 'action.state-observed');
+      let eventsToRender = nonObserved.slice();
+      if (observed.length === 1) {
+        eventsToRender.push(observed[0]);
+      } else if (observed.length > 1) {
+        eventsToRender.push({ ...observed[0], name: `action.state-observed (first of ${observed.length})` });
+        eventsToRender.push({ ...observed[observed.length - 1], name: `action.state-observed (last of ${observed.length})` });
+      }
+      eventsToRender.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      for (const e of eventsToRender) {
         const div = document.createElement('div');
         div.className = 'tev ' + classifyEvent(e.name);
         const extras = [];
@@ -450,7 +490,7 @@
           <div class="body">${escapeHtml(e.name)}${extras.length ? '<span class="small">' + escapeHtml(extras.join(' · ')) + '</span>' : ''}</div>`;
         tl.appendChild(div);
       }
-      if (t.events.length === 0) {
+      if (rawEvents.length === 0) {
         tl.innerHTML = '<div class="empty">nessun evento trovato in App Insights. Verifica che Dashboard:LogsWorkspaceId sia configurato e che la Web UAMI abbia ruolo Log Analytics Reader.</div>';
       }
 
