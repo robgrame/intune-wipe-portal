@@ -77,6 +77,7 @@ builder.Services.AddSingleton<Azure.Core.TokenCredential>(_ =>
     return new DefaultAzureCredential(credOptions);
 });
 builder.Services.AddSingleton(sp => new LogsQueryClient(sp.GetRequiredService<Azure.Core.TokenCredential>()));
+builder.Services.AddSingleton<EventGridMetricsCollector>();
 builder.Services.AddSingleton<AuditQueryService>();
 builder.Services.AddSingleton<CruscottoTelemetryService>();
 builder.Services.AddMemoryCache();

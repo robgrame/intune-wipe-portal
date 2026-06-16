@@ -379,6 +379,18 @@
       return (latestSnapshot?.queues || []).find(q => q.name === queueName) || null;
     }
 
+    function getFunctionAppStatus(functionApp) {
+      const apps = latestSnapshot?.diagnostics?.functionApps;
+      if (!apps || !functionApp) return null;
+      // Match by key (exact) or by partial match on AppRoleName containing the function app name
+      if (apps[functionApp]) return apps[functionApp];
+      for (const [key, val] of Object.entries(apps)) {
+        if (key.toLowerCase().includes(functionApp.toLowerCase().replace('devact-', '').replace('-dev', '')))
+          return val;
+      }
+      return null;
+    }
+
     function severityClass(status) {
       switch ((status || '').toLowerCase()) {
         case 'green': return 'green';
@@ -461,11 +473,33 @@
       }
 
       const queue = component.queueName ? getQueueSnapshot(component.queueName) : null;
+      const appStatus = component.functionApp ? getFunctionAppStatus(component.functionApp) : null;
       const poller = latestSnapshot?.diagnostics?.pollerHealth || 'unknown';
-      const status = queue ? queue.status || 'unknown' : String(poller);
+      const status = queue ? queue.status || 'unknown'
+                   : appStatus ? appStatus.health || 'unknown'
+                   : String(poller);
       const relatedWarnings = (latestSnapshot?.warnings || [])
         .filter(w => !component.queueName || w.toLowerCase().includes(component.queueName.toLowerCase()));
       const restartCmd = buildRestartCommand(component);
+
+      const serviceRows = !queue ? (() => {
+        const rows = [];
+        rows.push(`<tr><th>Function App</th><td><code>${escapeHtml(component.functionApp || '-')}</code></td></tr>`);
+        if (appStatus) {
+          rows.push(`<tr><th>Health</th><td><span class="pill ${severityClass(appStatus.health)}">${escapeHtml(String(appStatus.health).toUpperCase())}</span></td></tr>`);
+          rows.push(`<tr><th>Richieste (30m)</th><td>${appStatus.requests30m ?? 0}</td></tr>`);
+          rows.push(`<tr><th>Errori (30m)</th><td>${appStatus.failures30m ?? 0}</td></tr>`);
+          rows.push(`<tr><th>Durata media</th><td>${appStatus.avgDurationMs != null ? appStatus.avgDurationMs.toFixed(0) + ' ms' : '—'}</td></tr>`);
+          rows.push(`<tr><th>Ultima richiesta</th><td>${appStatus.lastRequestAt ? new Date(appStatus.lastRequestAt).toLocaleString() : '—'}</td></tr>`);
+          if (appStatus.lastError) rows.push(`<tr><th>Ultimo errore</th><td class="text-red">${escapeHtml(appStatus.lastError)}</td></tr>`);
+        } else {
+          rows.push(`<tr><th>Health</th><td><span class="pill gray">NESSUN DATO</span></td></tr>`);
+          rows.push(`<tr><th>Richieste (30m)</th><td>0</td></tr>`);
+        }
+        rows.push(`<tr><th>Poller</th><td><span class="pill ${severityClass(poller)}">${escapeHtml(String(poller).toUpperCase())}</span></td></tr>`);
+        rows.push(`<tr><th>Ultimo refresh</th><td>${latestSnapshot?.generatedAt ? new Date(latestSnapshot.generatedAt).toLocaleString() : '—'}</td></tr>`);
+        return rows.join('\n');
+      })() : '';
 
       bodyEl.innerHTML = `
         <div class="component-detail-status">Stato corrente: <span class="pill ${severityClass(status)}">${escapeHtml(String(status).toUpperCase())}</span></div>
@@ -476,10 +510,7 @@
             <tr><th>Dead-letter</th><td>${queue.deadLetter}</td></tr>
             <tr><th>Scheduled</th><td>${queue.scheduled}</td></tr>
             <tr><th>Error</th><td>${escapeHtml(queue.error || '-')}</td></tr>
-          ` : `
-            <tr><th>Ultimo refresh</th><td>${latestSnapshot?.generatedAt ? new Date(latestSnapshot.generatedAt).toLocaleString() : '—'}</td></tr>
-            <tr><th>Poller</th><td><span class="pill ${severityClass(poller)}">${escapeHtml(String(poller).toUpperCase())}</span></td></tr>
-          `}
+          ` : serviceRows}
         </table>
         ${component.queueName ? `
           <div class="peek-toolbar">
@@ -495,7 +526,8 @@
           <div id="componentPeekPanel" class="peek-panel"><div class="empty">Caricamento messaggi…</div></div>
         ` : `
           <div class="component-actions">
-            ${restartCmd ? `<button type="button" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia comando restart Function</button>` : ''}
+            ${component.functionApp ? `<button type="button" data-action="restart-function" data-app="${escapeHtml(component.functionApp)}">Riavvia Function</button>` : ''}
+            ${restartCmd ? `<button type="button" class="secondary" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia comando restart Function</button>` : ''}
           </div>
         `}
         <h3>Warning correlati</h3>

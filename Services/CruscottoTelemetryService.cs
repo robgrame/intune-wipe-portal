@@ -44,6 +44,7 @@ public sealed class CruscottoTelemetryService
     private readonly string? _resourceGroupName;
     private readonly double _graceHours;
     private readonly ILogger<CruscottoTelemetryService> _log;
+    private readonly EventGridMetricsCollector _metricsCollector;
     private static readonly HttpClient ManagementHttpClient = new();
 
     private static readonly string[] FlowQueues =
@@ -76,11 +77,13 @@ public sealed class CruscottoTelemetryService
         IConfiguration cfg,
         TokenCredential cred,
         LogsQueryClient logs,
+        EventGridMetricsCollector metricsCollector,
         ILogger<CruscottoTelemetryService> log)
     {
         _credential = cred;
         _log = log;
         _logs = logs;
+        _metricsCollector = metricsCollector;
         _workspaceId = cfg["Monitor:WorkspaceId"];
         _subscriptionId = cfg["Cruscotto:SubscriptionId"] ?? ResolveSubscriptionIdFromWebsiteOwnerName();
         _resourceGroupName = cfg["Cruscotto:ResourceGroupName"]
@@ -378,7 +381,7 @@ public sealed class CruscottoTelemetryService
         if (_logs is null || string.IsNullOrEmpty(_workspaceId))
         {
             issues.Add("Log Analytics workspace not configured (Monitor:WorkspaceId) — runtime probes unavailable.");
-            return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, issues.ToArray(), KqlAvailable: false);
+            return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, new Dictionary<string, FunctionAppStatus>(StringComparer.OrdinalIgnoreCase), issues.ToArray(), KqlAvailable: false);
         }
 
         try
@@ -482,7 +485,13 @@ public sealed class CruscottoTelemetryService
             issues.Add($"Recent anomalies lookup failed: {ex.GetType().Name}.");
         }
 
-        return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, issues.ToArray(), KqlAvailable: true);
+        var functionApps = new Dictionary<string, FunctionAppStatus>(StringComparer.OrdinalIgnoreCase);
+
+        // Populate from real-time Event Grid metrics (no KQL needed)
+        foreach (var (role, status) in _metricsCollector.GetSnapshot())
+            functionApps[role] = status;
+
+        return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, functionApps, issues.ToArray(), KqlAvailable: true);
     }
 
     // ─── Per-request trace ───────────────────────────────────────────────────
@@ -853,8 +862,18 @@ public sealed record DiagnosticsStatus(
     DateTimeOffset? PollerLastTick,
     NodeHealth PollerHealth,
     IReadOnlyDictionary<string, DateTimeOffset?> CapabilityLastSeen,
+    IReadOnlyDictionary<string, FunctionAppStatus> FunctionApps,
     string[] Issues,
     bool KqlAvailable);
+
+public sealed record FunctionAppStatus(
+    string AppName,
+    NodeHealth Health,
+    long Requests30m,
+    long Failures30m,
+    double? AvgDurationMs,
+    DateTimeOffset? LastRequestAt,
+    string? LastError);
 
 public sealed record RequestTrace(
     string CorrelationId,

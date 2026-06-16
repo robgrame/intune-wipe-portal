@@ -126,6 +126,7 @@ public sealed class CruscottoController : ControllerBase
     public async Task<IActionResult> EventGridWebhook(
         [FromBody] JsonElement eventsPayload,
         [FromServices] IHubContext<CruscottoHub> hub,
+        [FromServices] EventGridMetricsCollector metrics,
         CancellationToken ct)
     {
         var aegType = Request.Headers["aeg-event-type"].ToString();
@@ -141,6 +142,7 @@ public sealed class CruscottoController : ControllerBase
 
         if (string.Equals(aegType, "Notification", StringComparison.OrdinalIgnoreCase))
         {
+            metrics.Ingest(eventsPayload);
             var snapshot = await _svc.SnapshotAsync(ct);
             await hub.Clients.All.SendAsync("snapshot", snapshot, cancellationToken: ct);
             return Ok(new { accepted = true });
