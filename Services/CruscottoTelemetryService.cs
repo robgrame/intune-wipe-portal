@@ -238,19 +238,21 @@ public sealed class CruscottoTelemetryService
         try
         {
             const string pollerQuery = @"
-                AppRequests
+                AppTraces
                 | where TimeGenerated > ago(30m)
-                | where AppRoleName has 'proc' and Name has 'StatusPoller'
-                | summarize lastSeen = max(TimeGenerated) by Success = tostring(Success)
+                | where AppRoleName has 'proc'
+                | where Message has 'Functions.ActionStatusPoller'
+                | summarize
+                    successLast = maxif(TimeGenerated, Message has '(Succeeded'),
+                    failureLast = maxif(TimeGenerated, Message has '(Failed')
             ";
             var result = await _logs.QueryWorkspaceAsync(_workspaceId, pollerQuery, new QueryTimeRange(TimeSpan.FromMinutes(30)), cancellationToken: ct);
             DateTimeOffset? successLast = null, failureLast = null;
-            foreach (var row in result.Value.Table.Rows)
+            if (result.Value.Table.Rows.Count > 0)
             {
-                var success = row[0]?.ToString();
-                var last = row[1] is DateTimeOffset dto ? dto : (row[1] is DateTime dt ? new DateTimeOffset(dt, TimeSpan.Zero) : (DateTimeOffset?)null);
-                if (success == "True")       successLast = last;
-                else if (success == "False") failureLast = last;
+                var row = result.Value.Table.Rows[0];
+                successLast = row[0] is DateTimeOffset sDto ? sDto : (row[0] is DateTime sDt ? new DateTimeOffset(sDt, TimeSpan.Zero) : (DateTimeOffset?)null);
+                failureLast = row[1] is DateTimeOffset fDto ? fDto : (row[1] is DateTime fDt ? new DateTimeOffset(fDt, TimeSpan.Zero) : (DateTimeOffset?)null);
             }
             pollerLastTick = successLast ?? failureLast;
             if (successLast is null && failureLast is null)
@@ -276,13 +278,13 @@ public sealed class CruscottoTelemetryService
         catch (Exception ex)
         {
             _log.LogWarning(ex, "Cruscotto: poller heartbeat KQL failed");
-            issues.Add($"Poller heartbeat lookup failed: {ex.GetType().Name} (la MSI del portale deve avere 'Log Analytics Reader' sul workspace).");
+            issues.Add($"Poller heartbeat lookup failed: {ex.GetType().Name}.");
         }
 
         try
         {
             const string freshnessQuery = @"
-                AppRequests
+                union AppRequests, AppTraces
                 | where TimeGenerated > ago(24h)
                 | where AppRoleName has_any ('wipe','autopilot','bitlocker','rename')
                 | summarize lastSeen = max(TimeGenerated) by AppRoleName
