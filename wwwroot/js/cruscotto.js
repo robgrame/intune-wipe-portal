@@ -405,19 +405,21 @@
         () => alert(text));
     }
 
-    async function purgeQueue(queueName) {
+    async function purgeQueue(queueName, deadLetter) {
       if (!queueName) return;
-      if (!confirm(`Svuotare la coda ${queueName}?`)) return;
+      const target = deadLetter ? 'DLQ' : 'queue primaria';
+      if (!confirm(`Svuotare ${target} della coda ${queueName}?`)) return;
       try {
         const r = await fetch('/api/cruscotto/actions/purge-queue', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ queueName: queueName, maxMessages: 500 }),
+          body: JSON.stringify({ queueName: queueName, maxMessages: 500, deadLetter: !!deadLetter }),
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.message || ('HTTP ' + r.status));
-        alert(`Queue ${queueName}: rimossi ${body.drainedMessages} messaggi.`);
+        const mode = body.isDeadLetterQueue ? 'DLQ' : 'primary';
+        alert(`Queue ${queueName} (${mode}): rimossi ${body.drainedMessages} messaggi.`);
         tick();
       } catch (e) {
         alert('Svuotamento coda fallito: ' + e.message);
@@ -482,7 +484,8 @@
             <label>Top <input id="componentPeekTop" type="number" min="1" max="25" value="${selectedPeekTop}"></label>
             <button type="button" data-action="peek-primary">Peek messaggi</button>
             <button type="button" data-action="peek-deadletter">Peek DLQ</button>
-            <button type="button" class="secondary" data-action="purge" data-queue="${escapeHtml(component.queueName)}">Svuota coda</button>
+            <button type="button" class="secondary" data-action="purge-primary" data-queue="${escapeHtml(component.queueName)}">Svuota coda</button>
+            <button type="button" class="secondary" data-action="purge-dlq" data-queue="${escapeHtml(component.queueName)}">Svuota DLQ</button>
             <button type="button" class="secondary" data-action="portal-search" data-query="${escapeHtml(component.queueName)}">Apri in Azure Portal</button>
             ${component.functionApp ? `<button type="button" data-action="restart-function" data-app="${escapeHtml(component.functionApp)}">Riavvia Function</button>` : ''}
             ${restartCmd ? `<button type="button" class="secondary" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia restart CLI</button>` : ''}
@@ -503,8 +506,10 @@
         btn.addEventListener('click', () => copyText(btn.getAttribute('data-cmd'))));
       bodyEl.querySelectorAll('[data-action="restart-function"]').forEach(btn =>
         btn.addEventListener('click', () => restartFunction(btn.getAttribute('data-app'))));
-      bodyEl.querySelectorAll('[data-action="purge"]').forEach(btn =>
-        btn.addEventListener('click', () => purgeQueue(btn.getAttribute('data-queue'))));
+      bodyEl.querySelectorAll('[data-action="purge-primary"]').forEach(btn =>
+        btn.addEventListener('click', () => purgeQueue(btn.getAttribute('data-queue'), false)));
+      bodyEl.querySelectorAll('[data-action="purge-dlq"]').forEach(btn =>
+        btn.addEventListener('click', () => purgeQueue(btn.getAttribute('data-queue'), true)));
       bodyEl.querySelectorAll('[data-action="portal-search"]').forEach(btn =>
         btn.addEventListener('click', () => window.open(`https://portal.azure.com/#search/${encodeURIComponent(btn.getAttribute('data-query') || '')}`, '_blank')));
       bodyEl.querySelectorAll('[data-action="peek-primary"]').forEach(btn =>

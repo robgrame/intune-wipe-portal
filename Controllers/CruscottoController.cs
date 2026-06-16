@@ -65,7 +65,7 @@ public sealed class CruscottoController : ControllerBase
         try
         {
             var max = body.MaxMessages is > 0 ? body.MaxMessages.Value : 500;
-            var result = await _svc.PurgeQueueAsync(body.QueueName, max, ct);
+            var result = await _svc.PurgeQueueAsync(body.QueueName, max, body.DeadLetter, ct);
             return Ok(result);
         }
         catch (ArgumentException ex)
@@ -115,6 +115,6 @@ public sealed class CruscottoController : ControllerBase
     }
 
     public sealed record ResetBody(string? IntuneDeviceId, string? Reason);
-    public sealed record PurgeQueueBody(string? QueueName, int? MaxMessages);
+    public sealed record PurgeQueueBody(string? QueueName, int? MaxMessages, bool DeadLetter = false);
     public sealed record RestartFunctionBody(string? FunctionAppName);
 }

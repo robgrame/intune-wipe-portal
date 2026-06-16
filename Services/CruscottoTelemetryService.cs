@@ -148,7 +148,7 @@ public sealed class CruscottoTelemetryService
             RequestedAt: DateTimeOffset.UtcNow);
     }
 
-    public async Task<QueuePurgeResult> PurgeQueueAsync(string queueName, int maxMessages, CancellationToken ct)
+    public async Task<QueuePurgeResult> PurgeQueueAsync(string queueName, int maxMessages, bool deadLetterQueue, CancellationToken ct)
     {
         if (_sbClient is null)
             throw new InvalidOperationException("Service Bus data client is not configured.");
@@ -162,6 +162,7 @@ public sealed class CruscottoTelemetryService
         await using var receiver = _sbClient.CreateReceiver(queueName, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
+            SubQueue = deadLetterQueue ? SubQueue.DeadLetter : SubQueue.None,
         });
 
         while (drained < max)
@@ -183,6 +184,7 @@ public sealed class CruscottoTelemetryService
 
         return new QueuePurgeResult(
             QueueName: queueName,
+            IsDeadLetterQueue: deadLetterQueue,
             DrainedMessages: drained,
             LimitReached: drained >= max,
             PerformedAt: DateTimeOffset.UtcNow);
@@ -804,6 +806,7 @@ public sealed record QueueStatus(
 
 public sealed record QueuePurgeResult(
     string QueueName,
+    bool IsDeadLetterQueue,
     int DrainedMessages,
     bool LimitReached,
     DateTimeOffset PerformedAt);
