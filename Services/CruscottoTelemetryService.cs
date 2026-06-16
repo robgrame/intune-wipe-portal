@@ -303,6 +303,39 @@ public sealed class CruscottoTelemetryService
             issues.Add($"Capability freshness lookup failed: {ex.GetType().Name}.");
         }
 
+        try
+        {
+            const string anomaliesQuery = @"
+                AppEvents
+                | where TimeGenerated > ago(30m)
+                | where Name has 'fallback.issued'
+                    or Name has '.denied'
+                    or tostring(Properties.reason) has_any ('denied','not-in-entra','not-allowed','group')
+                | project TimeGenerated,
+                          eventName = Name,
+                          device = tostring(Properties.deviceName),
+                          reason = tostring(Properties.reason),
+                          corr = tostring(Properties.correlationId)
+                | order by TimeGenerated desc
+                | take 5
+            ";
+            var result = await _logs.QueryWorkspaceAsync(_workspaceId, anomaliesQuery, new QueryTimeRange(TimeSpan.FromMinutes(30)), cancellationToken: ct);
+            foreach (var row in result.Value.Table.Rows)
+            {
+                var ts = row[0] is DateTimeOffset dto ? dto : (row[0] is DateTime dt ? new DateTimeOffset(dt, TimeSpan.Zero) : (DateTimeOffset?)null);
+                var eventName = row[1]?.ToString() ?? "(event)";
+                var device = row[2]?.ToString();
+                var reason = row[3]?.ToString();
+                var corr = row[4]?.ToString();
+                issues.Add($"Recent anomaly: {eventName} @ {ts:yyyy-MM-dd HH:mm:ss}Z (device={device ?? "-"}, reason={reason ?? "-"}, corr={corr ?? "-"})");
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Cruscotto: recent anomalies KQL failed");
+            issues.Add($"Recent anomalies lookup failed: {ex.GetType().Name}.");
+        }
+
         return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, issues.ToArray(), KqlAvailable: true);
     }
 
