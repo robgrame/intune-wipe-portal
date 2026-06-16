@@ -241,7 +241,7 @@ public sealed class CruscottoTelemetryService
                 AppRequests
                 | where TimeGenerated > ago(30m)
                 | where AppRoleName has 'proc' and Name has 'StatusPoller'
-                | summarize last = max(TimeGenerated) by Success = tostring(Success)
+                | summarize lastSeen = max(TimeGenerated) by Success = tostring(Success)
             ";
             var result = await _logs.QueryWorkspaceAsync(_workspaceId, pollerQuery, new QueryTimeRange(TimeSpan.FromMinutes(30)), cancellationToken: ct);
             DateTimeOffset? successLast = null, failureLast = null;
@@ -285,7 +285,7 @@ public sealed class CruscottoTelemetryService
                 AppRequests
                 | where TimeGenerated > ago(24h)
                 | where AppRoleName has_any ('wipe','autopilot','bitlocker','rename')
-                | summarize last = max(TimeGenerated) by AppRoleName
+                | summarize lastSeen = max(TimeGenerated) by AppRoleName
             ";
             var result = await _logs.QueryWorkspaceAsync(_workspaceId, freshnessQuery, new QueryTimeRange(TimeSpan.FromHours(24)), cancellationToken: ct);
             foreach (var row in result.Value.Table.Rows)
