@@ -92,6 +92,29 @@ public sealed class CruscottoController : ControllerBase
         }
     }
 
+    [HttpPost("actions/restart-function")]
+    [Authorize(Policy = "CanScheduleWrite")]
+    public async Task<IActionResult> RestartFunction([FromBody] RestartFunctionBody body, CancellationToken ct)
+    {
+        if (body is null || string.IsNullOrWhiteSpace(body.FunctionAppName))
+            return BadRequest(new { message = "'functionAppName' è richiesto" });
+
+        try
+        {
+            var result = await _svc.RestartFunctionAppAsync(body.FunctionAppName, ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
     public sealed record ResetBody(string? IntuneDeviceId, string? Reason);
     public sealed record PurgeQueueBody(string? QueueName, int? MaxMessages);
+    public sealed record RestartFunctionBody(string? FunctionAppName);
 }

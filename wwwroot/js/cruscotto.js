@@ -424,6 +424,24 @@
       }
     }
 
+    async function restartFunction(functionAppName) {
+      if (!functionAppName) return;
+      if (!confirm(`Riavviare la Function App ${functionAppName}?`)) return;
+      try {
+        const r = await fetch('/api/cruscotto/actions/restart-function', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ functionAppName: functionAppName }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.message || ('HTTP ' + r.status));
+        alert(`Restart accettato per ${functionAppName}.`);
+      } catch (e) {
+        alert('Restart fallito: ' + e.message);
+      }
+    }
+
     function renderComponentModal(componentKey) {
       const titleEl = document.getElementById('componentModalTitle');
       const bodyEl = document.getElementById('componentModalBody');
@@ -466,7 +484,8 @@
             <button type="button" data-action="peek-deadletter">Peek DLQ</button>
             <button type="button" class="secondary" data-action="purge" data-queue="${escapeHtml(component.queueName)}">Svuota coda</button>
             <button type="button" class="secondary" data-action="portal-search" data-query="${escapeHtml(component.queueName)}">Apri in Azure Portal</button>
-            ${restartCmd ? `<button type="button" class="secondary" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia restart Function</button>` : ''}
+            ${component.functionApp ? `<button type="button" data-action="restart-function" data-app="${escapeHtml(component.functionApp)}">Riavvia Function</button>` : ''}
+            ${restartCmd ? `<button type="button" class="secondary" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia restart CLI</button>` : ''}
           </div>
           <div id="componentPeekPanel" class="peek-panel"><div class="empty">Caricamento messaggi…</div></div>
         ` : `
@@ -482,6 +501,8 @@
 
       bodyEl.querySelectorAll('[data-action="copy-restart"]').forEach(btn =>
         btn.addEventListener('click', () => copyText(btn.getAttribute('data-cmd'))));
+      bodyEl.querySelectorAll('[data-action="restart-function"]').forEach(btn =>
+        btn.addEventListener('click', () => restartFunction(btn.getAttribute('data-app'))));
       bodyEl.querySelectorAll('[data-action="purge"]').forEach(btn =>
         btn.addEventListener('click', () => purgeQueue(btn.getAttribute('data-queue'))));
       bodyEl.querySelectorAll('[data-action="portal-search"]').forEach(btn =>

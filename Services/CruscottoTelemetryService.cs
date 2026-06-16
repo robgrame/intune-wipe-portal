@@ -36,11 +36,15 @@ public sealed class CruscottoTelemetryService
 {
     private readonly ServiceBusAdministrationClient? _sbAdmin;
     private readonly ServiceBusClient? _sbClient;
+    private readonly TokenCredential _credential;
     private readonly BlobContainerClient? _ledger;
     private readonly LogsQueryClient? _logs;
     private readonly string? _workspaceId;
+    private readonly string? _subscriptionId;
+    private readonly string? _resourceGroupName;
     private readonly double _graceHours;
     private readonly ILogger<CruscottoTelemetryService> _log;
+    private static readonly HttpClient ManagementHttpClient = new();
 
     private static readonly string[] FlowQueues =
     {
@@ -52,15 +56,36 @@ public sealed class CruscottoTelemetryService
         "rename-action",
     };
 
+    private static readonly HashSet<string> RestartableFunctionApps = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "devact-web-dev",
+        "devact-proc-dev",
+        "devact-wipe-dev",
+        "devact-autopilot-dev",
+        "devact-bitlocker-dev",
+        "devact-rename-dev",
+        "idactions-web-dev",
+        "idactions-proc-dev",
+        "idactions-wipe-dev",
+        "idactions-autopilot-dev",
+        "idactions-bitlocker-dev",
+        "idactions-rename-dev",
+    };
+
     public CruscottoTelemetryService(
         IConfiguration cfg,
         TokenCredential cred,
         LogsQueryClient logs,
         ILogger<CruscottoTelemetryService> log)
     {
+        _credential = cred;
         _log = log;
         _logs = logs;
         _workspaceId = cfg["Monitor:WorkspaceId"];
+        _subscriptionId = cfg["Cruscotto:SubscriptionId"] ?? ResolveSubscriptionIdFromWebsiteOwnerName();
+        _resourceGroupName = cfg["Cruscotto:ResourceGroupName"]
+                             ?? cfg["Cruscotto:ResourceGroup"]
+                             ?? Environment.GetEnvironmentVariable("WEBSITE_RESOURCE_GROUP");
 
         var sbFqdn = cfg["Cruscotto:ServiceBusFullyQualifiedNamespace"];
         if (!string.IsNullOrWhiteSpace(sbFqdn))
@@ -87,6 +112,40 @@ public sealed class CruscottoTelemetryService
         }
 
         _graceHours = double.TryParse(cfg["Cruscotto:RearmGracePeriodHours"], out var g) && g > 0 ? g : 48;
+    }
+
+    public async Task<FunctionRestartResult> RestartFunctionAppAsync(string functionAppName, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(functionAppName))
+            throw new ArgumentException("Function app name is required.", nameof(functionAppName));
+
+        if (!RestartableFunctionApps.Contains(functionAppName))
+            throw new ArgumentException($"Function app '{functionAppName}' is not in allowlist.", nameof(functionAppName));
+
+        if (string.IsNullOrWhiteSpace(_subscriptionId) || string.IsNullOrWhiteSpace(_resourceGroupName))
+            throw new InvalidOperationException("Cruscotto ARM context is not configured (Cruscotto:SubscriptionId / Cruscotto:ResourceGroupName).");
+
+        var token = await _credential.GetTokenAsync(
+            new TokenRequestContext(new[] { "https://management.azure.com/.default" }),
+            ct);
+
+        var url = $"https://management.azure.com/subscriptions/{_subscriptionId}/resourceGroups/{_resourceGroupName}/providers/Microsoft.Web/sites/{functionAppName}/restart?api-version=2024-04-01";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+
+        using var response = await ManagementHttpClient.SendAsync(request, ct);
+        var responseBody = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Restart failed for {functionAppName}: {(int)response.StatusCode} {response.ReasonPhrase}. {responseBody}".Trim());
+        }
+
+        return new FunctionRestartResult(
+            FunctionAppName: functionAppName,
+            Accepted: true,
+            HttpStatusCode: (int)response.StatusCode,
+            RequestedAt: DateTimeOffset.UtcNow);
     }
 
     public async Task<QueuePurgeResult> PurgeQueueAsync(string queueName, int maxMessages, CancellationToken ct)
@@ -712,6 +771,20 @@ public sealed class CruscottoTelemetryService
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static string? ResolveSubscriptionIdFromWebsiteOwnerName()
+    {
+        var owner = Environment.GetEnvironmentVariable("WEBSITE_OWNER_NAME");
+        if (string.IsNullOrWhiteSpace(owner))
+            return null;
+
+        var plus = owner.IndexOf('+');
+        if (plus <= 0)
+            return null;
+
+        var subscriptionId = owner[..plus];
+        return Guid.TryParse(subscriptionId, out _) ? subscriptionId : null;
+    }
 }
 
 // ─── Public DTOs ─────────────────────────────────────────────────────────────
@@ -757,6 +830,12 @@ public sealed record QueuePeekMessage(
     string? DeadLetterReason,
     string? DeadLetterErrorDescription,
     IReadOnlyDictionary<string, string> ApplicationProperties);
+
+public sealed record FunctionRestartResult(
+    string FunctionAppName,
+    bool Accepted,
+    int HttpStatusCode,
+    DateTimeOffset RequestedAt);
 
 public sealed record StuckLedgerEntry(
     string IntuneDeviceId, string CorrelationId, DateTimeOffset IssuedAt, double AgeHours);
