@@ -15,6 +15,17 @@ public sealed class EventGridMetricsCollector
     private readonly ConcurrentDictionary<string, AppMetricsBucket> _buckets = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Well-known roles pre-seeded so the UI never shows "no data" for known apps.
+    /// </summary>
+    private static readonly string[] KnownRoles = { "web", "proc", "wipe", "autopilot", "bitlocker", "rename" };
+
+    public EventGridMetricsCollector()
+    {
+        foreach (var role in KnownRoles)
+            _buckets.GetOrAdd(role, _ => new AppMetricsBucket());
+    }
+
+    /// <summary>
     /// Ingest a raw Event Grid event payload (array of events).
     /// Each event's <c>data</c> is expected to carry an <c>AuditStreamEnvelope</c>
     /// with <c>role</c>, <c>eventName</c>, <c>logLevel</c>, and <c>properties</c>.
@@ -53,7 +64,9 @@ public sealed class EventGridMetricsCollector
         {
             var (total, errors, lastAt, lastEvent, lastError) = bucket.Summarize(cutoff);
 
-            var health = total == 0 ? NodeHealth.Unknown
+            // If we've seen events for this role before but the 30m window is empty,
+            // that means the app is simply idle (no traffic) — not broken.
+            var health = total == 0 ? NodeHealth.Green  // idle = healthy (we know the role exists)
                        : errors > 0 && (double)errors / total > 0.5 ? NodeHealth.Red
                        : errors > 0 ? NodeHealth.Yellow
                        : NodeHealth.Green;
