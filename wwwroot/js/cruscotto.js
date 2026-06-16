@@ -11,6 +11,22 @@
       'rename-action'   : { node:'n-rename',    part:'part-disp-rename',    metricId:'m-rename'    },
     };
 
+    const COMPONENTS = {
+      'web-intake':      { key:'web-intake',      name:'Web intake',                 kind:'service', functionApp:'devact-web-dev' },
+      'proc-dispatcher': { key:'proc-dispatcher', name:'Proc dispatcher',            kind:'service', functionApp:'devact-proc-dev' },
+      'action-requests': { key:'action-requests', name:'Queue action-requests',      kind:'queue', queueName:'action-requests', functionApp:'devact-proc-dev' },
+      'action-dispatch': { key:'action-dispatch', name:'Queue action-dispatch',      kind:'queue', queueName:'action-dispatch', functionApp:'devact-proc-dev' },
+      'wipe-action':     { key:'wipe-action',     name:'Queue wipe-action',          kind:'queue', queueName:'wipe-action', functionApp:'devact-wipe-dev' },
+      'autopilot-action':{ key:'autopilot-action',name:'Queue autopilot-action',     kind:'queue', queueName:'autopilot-action', functionApp:'devact-autopilot-dev' },
+      'bitlocker-action':{ key:'bitlocker-action',name:'Queue bitlocker-action',     kind:'queue', queueName:'bitlocker-action', functionApp:'devact-bitlocker-dev' },
+      'rename-action':   { key:'rename-action',   name:'Queue rename-action',        kind:'queue', queueName:'rename-action', functionApp:'devact-rename-dev' },
+      'ms-graph':        { key:'ms-graph',        name:'Microsoft Graph',             kind:'external' }
+    };
+
+    let latestSnapshot = null;
+    let selectedComponentKey = null;
+    let interactionsBound = false;
+
     function setNodeClass(id, cls) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -31,6 +47,7 @@
     }
 
     function render(data) {
+      latestSnapshot = data || null;
       setText('lastUpdate', 'aggiornato ' + new Date(data.generatedAt).toLocaleTimeString());
 
       // Queues + corresponding capability nodes
@@ -95,6 +112,8 @@
       renderDiagnostics(data.diagnostics);
       renderStuckList(L.topStuck || []);
       renderFlowDiagram(data);
+      if (!interactionsBound) bindFlowInteractions();
+      refreshModalIfOpen();
     }
 
     // ─── Flow diagram (Intune.Up-style boxes + arrows + edge labels) ────────
@@ -109,18 +128,18 @@
     const FD_TOP_Y = 20, FD_BOT_Y = 280;
     // Top row x positions (5 boxes, 240 spacing, gap 40 between them).
     const FD_TOP = [
-      { id:'web',   x:20,   label:'Web (intake)',   sub:'HTTP /api/actions' },
-      { id:'areq',  x:260,  label:'Queue',          sub:'action-requests',   queue:'action-requests' },
-      { id:'proc',  x:500,  label:'Proc',           sub:'dispatcher' },
-      { id:'adisp', x:740,  label:'Queue',          sub:'action-dispatch',   queue:'action-dispatch' },
+      { id:'web',   x:20,   label:'Web (intake)',   sub:'HTTP /api/actions', component:'web-intake' },
+      { id:'areq',  x:260,  label:'Queue',          sub:'action-requests',   queue:'action-requests', component:'action-requests' },
+      { id:'proc',  x:500,  label:'Proc',           sub:'dispatcher',        component:'proc-dispatcher' },
+      { id:'adisp', x:740,  label:'Queue',          sub:'action-dispatch',   queue:'action-dispatch', component:'action-dispatch' },
       { id:'poll',  x:980,  label:'Status Poller',  sub:'observes terminal state' },
     ];
     // Bottom row: 4 capability runners aligned roughly under the dispatch fan-out.
     const FD_BOT = [
-      { id:'wipe',  x:140,  label:'Wipe',      sub:'wipe-action',      queue:'wipe-action' },
-      { id:'autop', x:420,  label:'Autopilot', sub:'autopilot-action', queue:'autopilot-action' },
-      { id:'bitl',  x:700,  label:'BitLocker', sub:'bitlocker-action', queue:'bitlocker-action' },
-      { id:'renm',  x:980,  label:'Rename',    sub:'rename-action',    queue:'rename-action' },
+      { id:'wipe',  x:140,  label:'Wipe',      sub:'wipe-action',      queue:'wipe-action', component:'wipe-action' },
+      { id:'autop', x:420,  label:'Autopilot', sub:'autopilot-action', queue:'autopilot-action', component:'autopilot-action' },
+      { id:'bitl',  x:700,  label:'BitLocker', sub:'bitlocker-action', queue:'bitlocker-action', component:'bitlocker-action' },
+      { id:'renm',  x:980,  label:'Rename',    sub:'rename-action',    queue:'rename-action', component:'rename-action' },
     ];
 
     function fdColors(status) {
@@ -164,6 +183,8 @@
       const status = queue ? queue.status : (spec.queue ? 'gray' : 'green');
       const c = fdColors(status);
       const g = fdEl('g');
+      const component = spec.component || spec.queue || '';
+      if (component) g.setAttribute('data-component', component);
       g.appendChild(fdEl('rect', {
         x: spec.x, y: spec.y, width: FD_NODE_W, height: FD_NODE_H,
         rx: 8, ry: 8, fill: c.fill, stroke: c.stroke, 'stroke-width': 2
@@ -193,6 +214,7 @@
       const x2 = toSpec.x;
       const y  = FD_TOP_Y + FD_NODE_H/2;
       const g  = fdEl('g');
+      if (queue && queue.name) g.setAttribute('data-component', queue.name);
       g.appendChild(fdEl('line', {
         x1: x1, y1: y, x2: x2, y2: y,
         stroke: c.line, 'stroke-width': w, 'marker-end': `url(#${c.marker})`, 'stroke-linecap':'round'
@@ -214,6 +236,7 @@
       const x2 = toSpec.x + FD_NODE_W/2;
       const y2 = FD_BOT_Y;
       const g  = fdEl('g');
+      if (queue && queue.name) g.setAttribute('data-component', queue.name);
       // Z-shaped polyline so non-aligned columns join cleanly:
       //   (x1,y1) → (x1, midY) → (x2, midY) → (x2, y2)
       const midY = (y1 + y2) / 2;
@@ -303,6 +326,161 @@
         div.querySelector('button').addEventListener('click', () => doReset(r.intuneDeviceId));
         el.appendChild(div);
       }
+    }
+
+    function bindFlowInteractions() {
+      interactionsBound = true;
+      document.addEventListener('click', (ev) => {
+        const closeTarget = ev.target.closest('[data-modal-close]');
+        if (closeTarget) {
+          closeComponentModal();
+          return;
+        }
+
+        if (!ev.target.closest('#flow') && !ev.target.closest('#flowDiag')) return;
+
+        const compEl = ev.target.closest('[data-component]');
+        const compKey = compEl ? compEl.getAttribute('data-component') : null;
+        if (!compKey) return;
+
+        ev.preventDefault();
+        openComponentModal(compKey);
+      });
+
+      document.getElementById('componentModalClose')?.addEventListener('click', closeComponentModal);
+    }
+
+    function openComponentModal(componentKey) {
+      selectedComponentKey = componentKey;
+      const modal = document.getElementById('componentModal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      renderComponentModal(componentKey);
+    }
+
+    function closeComponentModal() {
+      selectedComponentKey = null;
+      const modal = document.getElementById('componentModal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+    }
+
+    function refreshModalIfOpen() {
+      if (!selectedComponentKey) return;
+      renderComponentModal(selectedComponentKey);
+    }
+
+    function getQueueSnapshot(queueName) {
+      return (latestSnapshot?.queues || []).find(q => q.name === queueName) || null;
+    }
+
+    function severityClass(status) {
+      switch ((status || '').toLowerCase()) {
+        case 'green': return 'green';
+        case 'yellow': return 'yellow';
+        case 'red': return 'red';
+        default: return 'gray';
+      }
+    }
+
+    function buildRestartCommand(component) {
+      if (!component?.functionApp) return null;
+      return `az functionapp restart -g RG-INTUNE-DEVICEACTIONS -n ${component.functionApp}`;
+    }
+
+    function copyText(text) {
+      if (!text) return;
+      navigator.clipboard?.writeText(text).then(
+        () => alert('Comando copiato negli appunti.'),
+        () => alert(text));
+    }
+
+    async function purgeQueue(queueName) {
+      if (!queueName) return;
+      if (!confirm(`Svuotare la coda ${queueName}?`)) return;
+      try {
+        const r = await fetch('/api/cruscotto/actions/purge-queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ queueName: queueName, maxMessages: 500 }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.message || ('HTTP ' + r.status));
+        alert(`Queue ${queueName}: rimossi ${body.drainedMessages} messaggi.`);
+        tick();
+      } catch (e) {
+        alert('Svuotamento coda fallito: ' + e.message);
+      }
+    }
+
+    function renderComponentModal(componentKey) {
+      const titleEl = document.getElementById('componentModalTitle');
+      const bodyEl = document.getElementById('componentModalBody');
+      if (!titleEl || !bodyEl) return;
+
+      const component = COMPONENTS[componentKey] || { key: componentKey, name: componentKey, kind: 'service' };
+      titleEl.textContent = component.name;
+
+      if (component.kind === 'external') {
+        bodyEl.innerHTML = '<div class="empty">Componente esterno: usare Trace per dettaglio request-level.</div>';
+        return;
+      }
+
+      let queueHtml = '';
+      let status = 'unknown';
+      const queue = component.queueName ? getQueueSnapshot(component.queueName) : null;
+      if (queue) {
+        status = queue.status || 'unknown';
+        queueHtml = `
+          <table class="kv">
+            <tr><th>Queue</th><td><code>${escapeHtml(queue.name)}</code></td></tr>
+            <tr><th>Status</th><td><span class="pill ${severityClass(queue.status)}">${escapeHtml((queue.status || 'unknown').toUpperCase())}</span></td></tr>
+            <tr><th>Active</th><td>${queue.active}</td></tr>
+            <tr><th>Dead-letter</th><td>${queue.deadLetter}</td></tr>
+            <tr><th>Scheduled</th><td>${queue.scheduled}</td></tr>
+            <tr><th>Error</th><td>${escapeHtml(queue.error || '-')}</td></tr>
+          </table>`;
+      } else {
+        const poller = latestSnapshot?.diagnostics?.pollerHealth || 'unknown';
+        status = String(poller);
+        queueHtml = `
+          <table class="kv">
+            <tr><th>Status</th><td><span class="pill ${severityClass(poller)}">${escapeHtml(String(poller).toUpperCase())}</span></td></tr>
+            <tr><th>Ultimo refresh</th><td>${latestSnapshot?.generatedAt ? new Date(latestSnapshot.generatedAt).toLocaleString() : '—'}</td></tr>
+          </table>`;
+      }
+
+      const relatedWarnings = (latestSnapshot?.warnings || [])
+        .filter(w => !component.queueName || w.toLowerCase().includes(component.queueName.toLowerCase()));
+      const warningHtml = relatedWarnings.length
+        ? `<div class="warnings">${relatedWarnings.map(w => `<div class="warn warn-yellow">${escapeHtml(w)}</div>`).join('')}</div>`
+        : '<div class="empty">Nessun warning specifico.</div>';
+
+      const restartCmd = buildRestartCommand(component);
+      const actions = [];
+      if (component.queueName) {
+        actions.push(`<button class="secondary" data-action="purge" data-queue="${escapeHtml(component.queueName)}">Svuota coda (max 500)</button>`);
+        actions.push(`<button class="secondary" data-action="portal-search" data-query="${escapeHtml(component.queueName)}">Apri in Azure Portal</button>`);
+      }
+      if (restartCmd) {
+        actions.push(`<button data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia comando restart Function</button>`);
+      }
+
+      bodyEl.innerHTML = `
+        <div class="component-detail-status">Stato corrente: <span class="pill ${severityClass(status)}">${escapeHtml(String(status).toUpperCase())}</span></div>
+        ${queueHtml}
+        <h3>Warning correlati</h3>
+        ${warningHtml}
+        <div class="component-actions">${actions.join('')}</div>
+      `;
+
+      bodyEl.querySelectorAll('[data-action="copy-restart"]').forEach(btn =>
+        btn.addEventListener('click', () => copyText(btn.getAttribute('data-cmd'))));
+      bodyEl.querySelectorAll('[data-action="purge"]').forEach(btn =>
+        btn.addEventListener('click', () => purgeQueue(btn.getAttribute('data-queue'))));
+      bodyEl.querySelectorAll('[data-action="portal-search"]').forEach(btn =>
+        btn.addEventListener('click', () => window.open(`https://portal.azure.com/#search/${encodeURIComponent(btn.getAttribute('data-query') || '')}`, '_blank')));
     }
 
     // ─── search / trace / device ────────────────────────────────────────────

@@ -59,18 +59,18 @@
                         <path id="p-bitl-graph"     d="M 600 510 Q 560 560 500 580" />
                         <path id="p-renm-graph"     d="M 800 510 Q 650 580 510 580" />
                     </defs>
-                    <use id="e-client-web"     class="edge" href="#p-client-web"     marker-end="url(#arrow)" />
-                    <use id="e-web-areq"       class="edge" href="#p-web-areq"       marker-end="url(#arrow)" />
-                    <use id="e-areq-proc"      class="edge" href="#p-areq-proc"      marker-end="url(#arrow)" />
-                    <use id="e-proc-disp"      class="edge" href="#p-proc-disp"      marker-end="url(#arrow)" />
-                    <use id="e-disp-wipe"      class="edge" href="#p-disp-wipe"      marker-end="url(#arrow)" />
-                    <use id="e-disp-autopilot" class="edge" href="#p-disp-autopilot" marker-end="url(#arrow)" />
-                    <use id="e-disp-bitlocker" class="edge" href="#p-disp-bitlocker" marker-end="url(#arrow)" />
-                    <use id="e-disp-rename"    class="edge" href="#p-disp-rename"    marker-end="url(#arrow)" />
-                    <use id="e-wipe-graph"     class="edge" href="#p-wipe-graph"     marker-end="url(#arrow)" />
-                    <use id="e-autop-graph"    class="edge" href="#p-autop-graph"    marker-end="url(#arrow)" />
-                    <use id="e-bitl-graph"     class="edge" href="#p-bitl-graph"     marker-end="url(#arrow)" />
-                    <use id="e-renm-graph"     class="edge" href="#p-renm-graph"     marker-end="url(#arrow)" />
+                    <use id="e-client-web"     class="edge" href="#p-client-web"     marker-end="url(#arrow)" data-component="web-intake" />
+                    <use id="e-web-areq"       class="edge" href="#p-web-areq"       marker-end="url(#arrow)" data-component="action-requests" />
+                    <use id="e-areq-proc"      class="edge" href="#p-areq-proc"      marker-end="url(#arrow)" data-component="action-requests" />
+                    <use id="e-proc-disp"      class="edge" href="#p-proc-disp"      marker-end="url(#arrow)" data-component="action-dispatch" />
+                    <use id="e-disp-wipe"      class="edge" href="#p-disp-wipe"      marker-end="url(#arrow)" data-component="wipe-action" />
+                    <use id="e-disp-autopilot" class="edge" href="#p-disp-autopilot" marker-end="url(#arrow)" data-component="autopilot-action" />
+                    <use id="e-disp-bitlocker" class="edge" href="#p-disp-bitlocker" marker-end="url(#arrow)" data-component="bitlocker-action" />
+                    <use id="e-disp-rename"    class="edge" href="#p-disp-rename"    marker-end="url(#arrow)" data-component="rename-action" />
+                    <use id="e-wipe-graph"     class="edge" href="#p-wipe-graph"     marker-end="url(#arrow)" data-component="wipe-action" />
+                    <use id="e-autop-graph"    class="edge" href="#p-autop-graph"    marker-end="url(#arrow)" data-component="autopilot-action" />
+                    <use id="e-bitl-graph"     class="edge" href="#p-bitl-graph"     marker-end="url(#arrow)" data-component="bitlocker-action" />
+                    <use id="e-renm-graph"     class="edge" href="#p-renm-graph"     marker-end="url(#arrow)" data-component="rename-action" />
 
                     <circle id="part-web-areq"       class="particle hidden" r="5"><animateMotion dur="2s"   repeatCount="indefinite"><mpath href="#p-web-areq" /></animateMotion></circle>
                     <circle id="part-areq-proc"      class="particle hidden" r="5"><animateMotion dur="2s"   repeatCount="indefinite"><mpath href="#p-areq-proc" /></animateMotion></circle>
@@ -83,51 +83,51 @@
                     <g class="node gray" id="n-client" transform="translate(420,0)">
                         <rect width="140" height="32" rx="6" /><text class="title" x="70" y="20" text-anchor="middle">Client mTLS</text>
                     </g>
-                    <g class="node green" id="n-web" transform="translate(420,90)">
+                    <g class="node green" id="n-web" transform="translate(420,90)" data-component="web-intake">
                         <rect width="140" height="44" rx="6" />
                         <text class="title" x="70" y="20" text-anchor="middle">Web (intake)</text>
                         <text class="metric" x="70" y="36" text-anchor="middle" id="m-web">—</text>
                     </g>
-                    <g class="node green" id="n-areq" transform="translate(410,180)">
+                    <g class="node green" id="n-areq" transform="translate(410,180)" data-component="action-requests">
                         <rect width="160" height="44" rx="6" />
                         <text class="title" x="80" y="20" text-anchor="middle">SB action-requests</text>
                         <text class="metric" x="80" y="36" text-anchor="middle" id="m-areq">—</text>
                     </g>
-                    <g class="node green" id="n-proc" transform="translate(420,270)">
+                    <g class="node green" id="n-proc" transform="translate(420,270)" data-component="proc-dispatcher">
                         <rect width="140" height="44" rx="6" />
                         <text class="title" x="70" y="20" text-anchor="middle">Proc dispatcher</text>
                         <text class="metric" x="70" y="36" text-anchor="middle" id="m-proc">—</text>
                     </g>
-                    <g class="node green" id="n-disp" transform="translate(410,360)">
+                    <g class="node green" id="n-disp" transform="translate(410,360)" data-component="action-dispatch">
                         <rect width="160" height="44" rx="6" />
                         <text class="title" x="80" y="20" text-anchor="middle">SB action-dispatch</text>
                         <text class="metric" x="80" y="36" text-anchor="middle" id="m-disp">—</text>
                     </g>
-                    <g class="node green" id="n-wipe" transform="translate(130,450)">
+                    <g class="node green" id="n-wipe" transform="translate(130,450)" data-component="wipe-action">
                         <rect width="140" height="60" rx="6" />
                         <text class="title" x="70" y="22" text-anchor="middle">Wipe</text>
                         <text class="metric" x="70" y="40" text-anchor="middle" id="m-wipe">—</text>
                         <text class="metric" x="70" y="54" text-anchor="middle" id="m-wipe2">—</text>
                     </g>
-                    <g class="node green" id="n-autopilot" transform="translate(310,450)">
+                    <g class="node green" id="n-autopilot" transform="translate(310,450)" data-component="autopilot-action">
                         <rect width="140" height="60" rx="6" />
                         <text class="title" x="70" y="22" text-anchor="middle">Autopilot</text>
                         <text class="metric" x="70" y="40" text-anchor="middle" id="m-autopilot">—</text>
                         <text class="metric" x="70" y="54" text-anchor="middle" id="m-autopilot2">—</text>
                     </g>
-                    <g class="node green" id="n-bitlocker" transform="translate(530,450)">
+                    <g class="node green" id="n-bitlocker" transform="translate(530,450)" data-component="bitlocker-action">
                         <rect width="140" height="60" rx="6" />
                         <text class="title" x="70" y="22" text-anchor="middle">BitLocker</text>
                         <text class="metric" x="70" y="40" text-anchor="middle" id="m-bitlocker">—</text>
                         <text class="metric" x="70" y="54" text-anchor="middle" id="m-bitlocker2">—</text>
                     </g>
-                    <g class="node gray" id="n-rename" transform="translate(730,450)">
+                    <g class="node gray" id="n-rename" transform="translate(730,450)" data-component="rename-action">
                         <rect width="140" height="60" rx="6" />
                         <text class="title" x="70" y="22" text-anchor="middle">Rename</text>
                         <text class="metric" x="70" y="40" text-anchor="middle" id="m-rename">—</text>
                         <text class="metric" x="70" y="54" text-anchor="middle" id="m-rename2">—</text>
                     </g>
-                    <g class="node gray" id="n-graph" transform="translate(420,590)">
+                    <g class="node gray" id="n-graph" transform="translate(420,590)" data-component="ms-graph">
                         <rect width="140" height="32" rx="6" />
                         <text class="title" x="70" y="20" text-anchor="middle">Microsoft Graph</text>
                     </g>
@@ -222,6 +222,19 @@
         </div>
     </div>
 </main>
+
+<div id="componentModal" class="component-modal hidden" role="dialog" aria-modal="true" aria-labelledby="componentModalTitle">
+    <div class="component-modal__backdrop" data-modal-close="true"></div>
+    <div class="component-modal__panel">
+        <div class="component-modal__header">
+            <h2 id="componentModalTitle">Dettaglio componente</h2>
+            <button type="button" id="componentModalClose" class="component-modal__close" aria-label="Chiudi">✕</button>
+        </div>
+        <div id="componentModalBody" class="component-modal__body">
+            <div class="empty">Seleziona un componente nel diagramma.</div>
+        </div>
+    </div>
+</div>
 
 <footer>Refresh ogni <span id="refreshSec">5</span>s · sorgenti: ServiceBus admin + Ledger blob + KQL (App Insights) · portale operatore</footer>
 

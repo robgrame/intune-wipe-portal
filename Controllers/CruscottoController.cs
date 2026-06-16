@@ -55,5 +55,25 @@ public sealed class CruscottoController : ControllerBase
         });
     }
 
+    [HttpPost("actions/purge-queue")]
+    [Authorize(Policy = "CanScheduleWrite")]
+    public async Task<IActionResult> PurgeQueue([FromBody] PurgeQueueBody body, CancellationToken ct)
+    {
+        if (body is null || string.IsNullOrWhiteSpace(body.QueueName))
+            return BadRequest(new { message = "'queueName' è richiesto" });
+
+        try
+        {
+            var max = body.MaxMessages is > 0 ? body.MaxMessages.Value : 500;
+            var result = await _svc.PurgeQueueAsync(body.QueueName, max, ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     public sealed record ResetBody(string? IntuneDeviceId, string? Reason);
+    public sealed record PurgeQueueBody(string? QueueName, int? MaxMessages);
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Azure;
 using Azure.Core;
+using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 using Azure.Monitor.Query;
 using Azure.Monitor.Query.Models;
@@ -34,6 +35,7 @@ namespace IntuneWipePortal.Services;
 public sealed class CruscottoTelemetryService
 {
     private readonly ServiceBusAdministrationClient? _sbAdmin;
+    private readonly ServiceBusClient? _sbClient;
     private readonly BlobContainerClient? _ledger;
     private readonly LogsQueryClient? _logs;
     private readonly string? _workspaceId;
@@ -64,6 +66,7 @@ public sealed class CruscottoTelemetryService
         if (!string.IsNullOrWhiteSpace(sbFqdn))
         {
             _sbAdmin = new ServiceBusAdministrationClient(sbFqdn, cred);
+            _sbClient = new ServiceBusClient(sbFqdn, cred);
         }
         else
         {
@@ -84,6 +87,46 @@ public sealed class CruscottoTelemetryService
         }
 
         _graceHours = double.TryParse(cfg["Cruscotto:RearmGracePeriodHours"], out var g) && g > 0 ? g : 48;
+    }
+
+    public async Task<QueuePurgeResult> PurgeQueueAsync(string queueName, int maxMessages, CancellationToken ct)
+    {
+        if (_sbClient is null)
+            throw new InvalidOperationException("Service Bus data client is not configured.");
+
+        if (string.IsNullOrWhiteSpace(queueName) || !FlowQueues.Contains(queueName, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException($"Queue '{queueName}' is not allowed.", nameof(queueName));
+
+        var max = Math.Clamp(maxMessages, 1, 2_000);
+        var drained = 0;
+
+        await using var receiver = _sbClient.CreateReceiver(queueName, new ServiceBusReceiverOptions
+        {
+            ReceiveMode = ServiceBusReceiveMode.PeekLock,
+        });
+
+        while (drained < max)
+        {
+            var chunk = Math.Min(100, max - drained);
+            var messages = await receiver.ReceiveMessagesAsync(
+                maxMessages: chunk,
+                maxWaitTime: TimeSpan.FromSeconds(2),
+                cancellationToken: ct);
+
+            if (messages.Count == 0) break;
+
+            foreach (var message in messages)
+            {
+                await receiver.CompleteMessageAsync(message, ct);
+                drained++;
+            }
+        }
+
+        return new QueuePurgeResult(
+            QueueName: queueName,
+            DrainedMessages: drained,
+            LimitReached: drained >= max,
+            PerformedAt: DateTimeOffset.UtcNow);
     }
 
     // ─── Overview snapshot ────────────────────────────────────────────────────
@@ -606,6 +649,12 @@ public sealed record DashboardSnapshot(
 public sealed record QueueStatus(
     string Name, long Active, long DeadLetter, long Scheduled,
     DateTimeOffset? AccessedAt, NodeHealth Status, string? Error);
+
+public sealed record QueuePurgeResult(
+    string QueueName,
+    int DrainedMessages,
+    bool LimitReached,
+    DateTimeOffset PerformedAt);
 
 public sealed record StuckLedgerEntry(
     string IntuneDeviceId, string CorrelationId, DateTimeOffset IssuedAt, double AgeHours);

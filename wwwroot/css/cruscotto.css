@@ -36,6 +36,7 @@
     /* Edges + flow particles */
     .edge { fill:none; stroke:var(--edge); stroke-width:2; }
     .edge.live { stroke:var(--accent); stroke-opacity:.6; }
+    [data-component] { cursor:pointer; }
     .particle { fill:var(--accent); opacity:.85; }
     .particle.hidden { display:none; }
 
@@ -111,6 +112,85 @@
     .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
     .tabpane { display:none; }
     .tabpane.active { display:block; }
+
+    .component-modal.hidden { display:none; }
+    .component-modal {
+      position:fixed;
+      inset:0;
+      z-index:1200;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+    }
+    .component-modal__backdrop {
+      position:absolute;
+      inset:0;
+      background:rgba(0,0,0,.6);
+    }
+    .component-modal__panel {
+      position:relative;
+      width:min(920px, 96vw);
+      max-height:88vh;
+      overflow:auto;
+      background:var(--panel);
+      border:1px solid var(--edge);
+      border-radius:10px;
+      padding:14px;
+      box-shadow:0 12px 40px rgba(0,0,0,.45);
+    }
+    .component-modal__header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .component-modal__header h2 {
+      margin:0;
+      font-size:16px;
+      color:var(--text);
+      text-transform:none;
+      letter-spacing:normal;
+    }
+    .component-modal__close {
+      border:1px solid var(--edge);
+      background:#0b0f14;
+      color:var(--text);
+      border-radius:6px;
+      width:34px;
+      height:34px;
+      cursor:pointer;
+    }
+    .component-modal__body h3 {
+      margin:12px 0 6px 0;
+      font-size:13px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.4px;
+    }
+    .component-actions {
+      margin-top:12px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .component-actions button {
+      padding:7px 10px;
+      border:1px solid var(--edge);
+      border-radius:6px;
+      background:var(--accent);
+      color:#fff;
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .component-actions button.secondary {
+      background:var(--panel);
+      color:var(--text);
+    }
+    .component-detail-status {
+      margin-bottom:10px;
+    }
 
     @media (max-width: 1200px) {
       .grid { grid-template-columns: 1fr; }
