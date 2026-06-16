@@ -84,7 +84,13 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<CapabilityRegistry>();
 builder.Services.AddSingleton<WipeScheduleService>();
 builder.Services.AddHostedService<CruscottoRealtimeBroadcaster>();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddJsonProtocol(o =>
+    {
+        o.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        o.PayloadSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 
 // --- Razor components (Interactive Server) + cascading auth state so
 // AuthorizeView / AuthorizeRouteView work end-to-end.

@@ -381,7 +381,10 @@ public sealed class CruscottoTelemetryService
         if (_logs is null || string.IsNullOrEmpty(_workspaceId))
         {
             issues.Add("Log Analytics workspace not configured (Monitor:WorkspaceId) — runtime probes unavailable.");
-            return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, new Dictionary<string, FunctionAppStatus>(StringComparer.OrdinalIgnoreCase), issues.ToArray(), KqlAvailable: false);
+            var earlyApps = new Dictionary<string, FunctionAppStatus>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (role, status) in _metricsCollector.GetSnapshot())
+                earlyApps[role] = status;
+            return new DiagnosticsStatus(pollerLastTick, pollerHealth, capabilityFreshness, earlyApps, issues.ToArray(), KqlAvailable: false);
         }
 
         try
@@ -862,7 +865,7 @@ public sealed record DiagnosticsStatus(
     DateTimeOffset? PollerLastTick,
     NodeHealth PollerHealth,
     IReadOnlyDictionary<string, DateTimeOffset?> CapabilityLastSeen,
-    IReadOnlyDictionary<string, FunctionAppStatus> FunctionApps,
+    Dictionary<string, FunctionAppStatus> FunctionApps,
     string[] Issues,
     bool KqlAvailable);
 
