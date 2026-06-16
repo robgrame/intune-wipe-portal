@@ -44,6 +44,8 @@
     table.kv { width:100%; border-collapse:collapse; font-size:12px; }
     table.kv th, table.kv td { padding:4px 6px; text-align:left; border-bottom:1px solid var(--edge); }
     table.kv th { color:var(--muted); font-weight:500; }
+    tr.denied-checkpoint { background:rgba(220,38,38,.12); }
+    tr.denied-checkpoint td { color:#dc2626; font-weight:700; font-size:14px; }
     .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; }
     .pill.green  { background:rgba(63,185,80,.15);  color:var(--green); }
     .pill.yellow { background:rgba(210,153,34,.15); color:var(--yellow); }
@@ -76,6 +78,7 @@
     .tev { display:grid; grid-template-columns:90px 90px 1fr; gap:10px; padding:6px 8px; border-left:3px solid var(--gray); background:#0b0f14; border-radius:0 4px 4px 0; font-size:12px; }
     .tev.accepted, .tev.enqueued, .tev.received, .tev.forwarded, .tev.consumed { border-left-color:var(--accent); }
     .tev.completed { border-left-color:var(--green); }
+    .tev.denied { border-left-color:#dc2626; background:rgba(220,38,38,.1); }
     .tev.failed, .tev.exception { border-left-color:var(--red); }
     .tev.dedup { border-left-color:var(--yellow); }
     .tev.rearmed { border-left-color:#a371f7; }

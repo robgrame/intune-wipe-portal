@@ -846,6 +846,7 @@
 
     function classifyEvent(name) {
       const n = (name||'').toLowerCase();
+      if (n.includes('denied')) return 'denied';
       if (n.endsWith('.completed')) return 'completed';
       if (n.endsWith('.failed') || n.includes('exception')) return 'failed';
       if (n.includes('already-issued') || n.includes('dedup')) return 'dedup';
@@ -864,11 +865,13 @@
       document.getElementById('traceMeta').textContent = meta;
 
       const rawEvents = Array.isArray(t.events) ? t.events : [];
+      const hasDenied = rawEvents.some(e => (e.name||'').includes('denied'));
       const checkpointDefs = [
         { id:'validated', label:'Validata (request received)', match:e => e.name === 'action.request.received' },
         { id:'accepted', label:'Accettata', match:e => e.name === 'action.request.accepted' },
         { id:'deviceResolved', label:'Device risolto in Entra', match:e => e.name === 'wipe.validation.device-resolved' },
         { id:'groupAllowed', label:'Device autorizzato dal gruppo', match:e => e.name === 'wipe.validation.group-allowed' },
+        { id:'denied', label:'🚫 RICHIESTA NEGATA', match:e => (e.name||'').includes('denied'), isDenied:true },
         { id:'managedResolved', label:'ManagedDevice risolto', match:e => e.name === 'wipe.validation.managed-device-resolved' },
         { id:'dispatch', label:'Presa in carico da Proc', match:e => e.name === 'action.dispatch.received' },
         { id:'forwarded', label:'Forward verso capability', match:e => e.name === 'action.forwarded' },
@@ -877,7 +880,7 @@
         { id:'graph', label:'Richiesta Graph inviata', match:e => (e.name||'').includes('.graph.issued') },
         { id:'tracker', label:'Status tracker inizializzato', match:e => e.name === 'wipe.status-tracker.initialized' },
         { id:'fallback', label:'Fallback attivato (sync/reboot)', match:e => (e.name||'').includes('fallback.issued') },
-        { id:'runnerdone', label:'Runner completato', match:e => (e.name||'').endsWith('.action.completed') },
+        { id:'runnerdone', label: hasDenied ? '🚫 Runner terminato (NEGATA)' : 'Runner completato', match:e => (e.name||'').endsWith('.action.completed'), isDenied: hasDenied },
         { id:'terminal', label:'Terminale osservato dal poller', match:e => e.name === 'action.completed' }
       ];
       const cpRows = checkpointDefs.map(cp => {
@@ -885,6 +888,7 @@
         return {
           label: cp.label,
           ok: !!ev,
+          isDenied: !!cp.isDenied && !!ev,
           at: ev ? new Date(ev.timestamp).toLocaleString() : '—'
         };
       });
@@ -894,7 +898,7 @@
       cpHost.innerHTML = `
         <table class="kv">
           <tr><th>Checkpoint</th><th>Stato</th><th>Timestamp</th></tr>
-          ${cpRows.map(r => `<tr><td>${escapeHtml(r.label)}</td><td>${r.ok ? '✅' : '—'}</td><td>${escapeHtml(r.at)}</td></tr>`).join('')}
+          ${cpRows.map(r => `<tr class="${r.isDenied ? 'denied-checkpoint' : ''}"><td>${escapeHtml(r.label)}</td><td>${r.isDenied ? '🚫' : r.ok ? '✅' : '—'}</td><td>${escapeHtml(r.at)}</td></tr>`).join('')}
           <tr><th>state-observed (poller)</th><td colspan="2">${stateObservedCount}</td></tr>
         </table>`;
 
