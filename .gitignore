@@ -9,3 +9,4 @@ weblogs*/
 webapp-logs*.zip
 
 dist/
+deploy.zip

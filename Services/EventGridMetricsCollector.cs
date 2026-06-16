@@ -61,13 +61,25 @@ public sealed class EventGridMetricsCollector
                 var reason = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("reason", out var rn) ? rn.GetString() : null;
                 var actionType = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("actionType", out var at) ? at.GetString() : null;
 
+                // Derive a human-readable reason from the eventName when explicit reason is absent
+                if (string.IsNullOrWhiteSpace(reason))
+                {
+                    reason = eventName switch
+                    {
+                        var e when e.Contains("not-in-allowed-group", StringComparison.OrdinalIgnoreCase) => "Device non nel gruppo autorizzato",
+                        var e when e.Contains("group-check-failed", StringComparison.OrdinalIgnoreCase) => "Verifica gruppo fallita",
+                        var e when e.Contains("not-in-entra", StringComparison.OrdinalIgnoreCase) => "Device non registrato in Entra ID",
+                        _ => eventName
+                    };
+                }
+
                 _deniedEvents.Enqueue(new DeniedEvent(
                     Timestamp: DateTimeOffset.UtcNow,
                     EventName: eventName,
                     Role: role!,
                     DeviceName: device,
                     CorrelationId: corr,
-                    Reason: reason ?? eventName,
+                    Reason: reason,
                     ActionType: actionType));
 
                 // Prune denied events older than 60 min

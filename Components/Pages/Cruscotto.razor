@@ -131,6 +131,13 @@
                         <rect width="140" height="32" rx="6" />
                         <text class="title" x="70" y="20" text-anchor="middle">Microsoft Graph</text>
                     </g>
+                    <g class="node gray" id="n-denied" transform="translate(20,270)" data-component="denied-bin" style="cursor:pointer">
+                        <rect width="160" height="54" rx="6" stroke-dasharray="4 3" />
+                        <text class="title" x="80" y="20" text-anchor="middle">🗑️ Denied</text>
+                        <text class="metric" x="80" y="40" text-anchor="middle" id="m-denied">0 negata/e</text>
+                    </g>
+                    <path id="p-proc-denied" d="M 420 292 Q 300 292 180 292" />
+                    <use id="e-proc-denied" class="edge hidden" href="#p-proc-denied" marker-end="url(#arrow)" stroke-dasharray="5 3" data-component="denied-bin" />
                 </svg>
             </section>
 
@@ -158,6 +165,10 @@
             </aside>
         </div>
         <div class="detail-grid">
+            <section class="panel">
+                <h2>🗑️ Richieste Negate</h2>
+                <div id="deniedBin"><div class="empty">nessuna richiesta negata</div></div>
+            </section>
             <section class="panel">
                 <h2>Ledger bloccate (azioni rapide)</h2>
                 <div id="stuckList"><div class="empty">nessuna entry bloccata</div></div>

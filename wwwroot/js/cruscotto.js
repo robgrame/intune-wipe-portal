@@ -120,6 +120,7 @@
 
       renderDiagnostics(data.diagnostics);
       renderStuckList(L.topStuck || []);
+      renderDeniedBin(denied);
       renderFlowDiagram(data);
       if (!interactionsBound) bindFlowInteractions();
       refreshModalIfOpen();
@@ -371,6 +372,45 @@
         div.querySelector('button').addEventListener('click', () => doReset(r.intuneDeviceId));
         el.appendChild(div);
       }
+    }
+
+    function renderDeniedBin(denied) {
+      // Update the Panoramica SVG node
+      const mDenied = document.getElementById('m-denied');
+      if (mDenied) mDenied.textContent = denied.length > 0 ? `${denied.length} negata/e (1h)` : '0 negata/e';
+      const nDenied = document.getElementById('n-denied');
+      if (nDenied) {
+        nDenied.classList.remove('green', 'gray', 'red');
+        nDenied.classList.add(denied.length > 0 ? 'red' : 'gray');
+      }
+      const eDenied = document.getElementById('e-proc-denied');
+      if (eDenied) eDenied.classList.toggle('hidden', denied.length === 0);
+
+      // Render the denied panel in Panoramica
+      const el = document.getElementById('deniedBin');
+      if (!el) return;
+      if (!denied.length) { el.innerHTML = '<div class="empty">Nessuna richiesta negata nell\'ultima ora.</div>'; return; }
+      let html = '';
+      for (const d of denied) {
+        const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '—';
+        const device = d.deviceName || '—';
+        const action = d.actionType || '—';
+        const reason = d.reason || d.eventName || '—';
+        const corr = d.correlationId || '—';
+        html += `<div class="denied-row">
+          <div class="denied-row__main">
+            <span class="denied-row__icon">🚫</span>
+            <span class="denied-row__device">${escapeHtml(device)}</span>
+            <span class="denied-row__reason">${escapeHtml(reason)}</span>
+          </div>
+          <div class="denied-row__meta">
+            <span>${escapeHtml(time)}</span>
+            <span>${escapeHtml(action)}</span>
+            <code>${escapeHtml(corr)}</code>
+          </div>
+        </div>`;
+      }
+      el.innerHTML = html;
     }
 
     function bindFlowInteractions() {
