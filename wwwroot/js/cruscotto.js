@@ -413,10 +413,15 @@
       const checkpointDefs = [
         { id:'validated', label:'Validata (request received)', match:e => e.name === 'action.request.received' },
         { id:'accepted', label:'Accettata', match:e => e.name === 'action.request.accepted' },
+        { id:'deviceResolved', label:'Device risolto in Entra', match:e => e.name === 'wipe.validation.device-resolved' },
+        { id:'groupAllowed', label:'Device autorizzato dal gruppo', match:e => e.name === 'wipe.validation.group-allowed' },
+        { id:'managedResolved', label:'ManagedDevice risolto', match:e => e.name === 'wipe.validation.managed-device-resolved' },
         { id:'dispatch', label:'Presa in carico da Proc', match:e => e.name === 'action.dispatch.received' },
         { id:'forwarded', label:'Forward verso capability', match:e => e.name === 'action.forwarded' },
         { id:'consumed', label:'Consumata dal runner wipe', match:e => (e.name||'').endsWith('.action.consumed') },
+        { id:'reserved', label:'Ledger riservato', match:e => e.name === 'wipe.ledger.reserved' },
         { id:'graph', label:'Richiesta Graph inviata', match:e => (e.name||'').includes('.graph.issued') },
+        { id:'tracker', label:'Status tracker inizializzato', match:e => e.name === 'wipe.status-tracker.initialized' },
         { id:'fallback', label:'Fallback attivato (sync/reboot)', match:e => (e.name||'').includes('fallback.issued') },
         { id:'runnerdone', label:'Runner completato', match:e => (e.name||'').endsWith('.action.completed') },
         { id:'terminal', label:'Terminale osservato dal poller', match:e => e.name === 'action.completed' }
