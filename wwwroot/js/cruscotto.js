@@ -25,6 +25,9 @@
 
     let latestSnapshot = null;
     let selectedComponentKey = null;
+    let selectedPeekMode = 'primary';
+    let selectedPeekTop = 10;
+    let peekRequestToken = 0;
     let interactionsBound = false;
 
     function setNodeClass(id, cls) {
@@ -395,6 +398,13 @@
         () => alert(text));
     }
 
+    function copyBody(text) {
+      if (!text) return;
+      navigator.clipboard?.writeText(text).then(
+        () => alert('Body copiato negli appunti.'),
+        () => alert(text));
+    }
+
     async function purgeQueue(queueName) {
       if (!queueName) return;
       if (!confirm(`Svuotare la coda ${queueName}?`)) return;
@@ -421,58 +431,53 @@
 
       const component = COMPONENTS[componentKey] || { key: componentKey, name: componentKey, kind: 'service' };
       titleEl.textContent = component.name;
+      selectedComponentKey = component.key;
 
       if (component.kind === 'external') {
         bodyEl.innerHTML = '<div class="empty">Componente esterno: usare Trace per dettaglio request-level.</div>';
         return;
       }
 
-      let queueHtml = '';
-      let status = 'unknown';
       const queue = component.queueName ? getQueueSnapshot(component.queueName) : null;
-      if (queue) {
-        status = queue.status || 'unknown';
-        queueHtml = `
-          <table class="kv">
+      const poller = latestSnapshot?.diagnostics?.pollerHealth || 'unknown';
+      const status = queue ? queue.status || 'unknown' : String(poller);
+      const relatedWarnings = (latestSnapshot?.warnings || [])
+        .filter(w => !component.queueName || w.toLowerCase().includes(component.queueName.toLowerCase()));
+      const restartCmd = buildRestartCommand(component);
+
+      bodyEl.innerHTML = `
+        <div class="component-detail-status">Stato corrente: <span class="pill ${severityClass(status)}">${escapeHtml(String(status).toUpperCase())}</span></div>
+        <table class="kv">
+          ${queue ? `
             <tr><th>Queue</th><td><code>${escapeHtml(queue.name)}</code></td></tr>
-            <tr><th>Status</th><td><span class="pill ${severityClass(queue.status)}">${escapeHtml((queue.status || 'unknown').toUpperCase())}</span></td></tr>
             <tr><th>Active</th><td>${queue.active}</td></tr>
             <tr><th>Dead-letter</th><td>${queue.deadLetter}</td></tr>
             <tr><th>Scheduled</th><td>${queue.scheduled}</td></tr>
             <tr><th>Error</th><td>${escapeHtml(queue.error || '-')}</td></tr>
-          </table>`;
-      } else {
-        const poller = latestSnapshot?.diagnostics?.pollerHealth || 'unknown';
-        status = String(poller);
-        queueHtml = `
-          <table class="kv">
-            <tr><th>Status</th><td><span class="pill ${severityClass(poller)}">${escapeHtml(String(poller).toUpperCase())}</span></td></tr>
+          ` : `
             <tr><th>Ultimo refresh</th><td>${latestSnapshot?.generatedAt ? new Date(latestSnapshot.generatedAt).toLocaleString() : '—'}</td></tr>
-          </table>`;
-      }
-
-      const relatedWarnings = (latestSnapshot?.warnings || [])
-        .filter(w => !component.queueName || w.toLowerCase().includes(component.queueName.toLowerCase()));
-      const warningHtml = relatedWarnings.length
-        ? `<div class="warnings">${relatedWarnings.map(w => `<div class="warn warn-yellow">${escapeHtml(w)}</div>`).join('')}</div>`
-        : '<div class="empty">Nessun warning specifico.</div>';
-
-      const restartCmd = buildRestartCommand(component);
-      const actions = [];
-      if (component.queueName) {
-        actions.push(`<button class="secondary" data-action="purge" data-queue="${escapeHtml(component.queueName)}">Svuota coda (max 500)</button>`);
-        actions.push(`<button class="secondary" data-action="portal-search" data-query="${escapeHtml(component.queueName)}">Apri in Azure Portal</button>`);
-      }
-      if (restartCmd) {
-        actions.push(`<button data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia comando restart Function</button>`);
-      }
-
-      bodyEl.innerHTML = `
-        <div class="component-detail-status">Stato corrente: <span class="pill ${severityClass(status)}">${escapeHtml(String(status).toUpperCase())}</span></div>
-        ${queueHtml}
+            <tr><th>Poller</th><td><span class="pill ${severityClass(poller)}">${escapeHtml(String(poller).toUpperCase())}</span></td></tr>
+          `}
+        </table>
+        ${component.queueName ? `
+          <div class="peek-toolbar">
+            <label>Top <input id="componentPeekTop" type="number" min="1" max="25" value="${selectedPeekTop}"></label>
+            <button type="button" data-action="peek-primary">Peek messaggi</button>
+            <button type="button" data-action="peek-deadletter">Peek DLQ</button>
+            <button type="button" class="secondary" data-action="purge" data-queue="${escapeHtml(component.queueName)}">Svuota coda</button>
+            <button type="button" class="secondary" data-action="portal-search" data-query="${escapeHtml(component.queueName)}">Apri in Azure Portal</button>
+            ${restartCmd ? `<button type="button" class="secondary" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia restart Function</button>` : ''}
+          </div>
+          <div id="componentPeekPanel" class="peek-panel"><div class="empty">Caricamento messaggi…</div></div>
+        ` : `
+          <div class="component-actions">
+            ${restartCmd ? `<button type="button" data-action="copy-restart" data-cmd="${escapeHtml(restartCmd)}">Copia comando restart Function</button>` : ''}
+          </div>
+        `}
         <h3>Warning correlati</h3>
-        ${warningHtml}
-        <div class="component-actions">${actions.join('')}</div>
+        ${relatedWarnings.length
+          ? `<div class="warnings">${relatedWarnings.map(w => `<div class="warn warn-yellow">${escapeHtml(w)}</div>`).join('')}</div>`
+          : '<div class="empty">Nessun warning specifico.</div>'}
       `;
 
       bodyEl.querySelectorAll('[data-action="copy-restart"]').forEach(btn =>
@@ -481,6 +486,105 @@
         btn.addEventListener('click', () => purgeQueue(btn.getAttribute('data-queue'))));
       bodyEl.querySelectorAll('[data-action="portal-search"]').forEach(btn =>
         btn.addEventListener('click', () => window.open(`https://portal.azure.com/#search/${encodeURIComponent(btn.getAttribute('data-query') || '')}`, '_blank')));
+      bodyEl.querySelectorAll('[data-action="peek-primary"]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          selectedPeekMode = 'primary';
+          loadComponentPeek(component.key, selectedPeekMode, readPeekTop());
+        }));
+      bodyEl.querySelectorAll('[data-action="peek-deadletter"]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          selectedPeekMode = 'deadletter';
+          loadComponentPeek(component.key, selectedPeekMode, readPeekTop());
+        }));
+
+      if (component.queueName) {
+        loadComponentPeek(component.key, selectedPeekMode, readPeekTop());
+      }
+    }
+
+    function readPeekTop() {
+      const input = document.getElementById('componentPeekTop');
+      const value = Number(input?.value || selectedPeekTop || 10);
+      return Math.max(1, Math.min(25, Number.isFinite(value) ? value : 10));
+    }
+
+    async function loadComponentPeek(componentKey, mode, top) {
+      const component = COMPONENTS[componentKey];
+      if (!component?.queueName) return;
+
+      selectedPeekTop = top || readPeekTop();
+      const token = ++peekRequestToken;
+      const panel = document.getElementById('componentPeekPanel');
+      if (!panel) return;
+      panel.innerHTML = '<div class="empty">Caricamento messaggi…</div>';
+      try {
+        const url = `/api/cruscotto/queues/${encodeURIComponent(component.queueName)}/peek?top=${selectedPeekTop}&deadLetter=${mode === 'deadletter'}`;
+        const r = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).substring(0, 200));
+        if (token !== peekRequestToken || selectedComponentKey !== componentKey) return;
+        renderComponentPeek(await r.json(), mode);
+      } catch (e) {
+        if (token !== peekRequestToken || selectedComponentKey !== componentKey) return;
+        panel.innerHTML = `<div class="empty">Errore caricamento messaggi: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function renderComponentPeek(data, mode) {
+      const panel = document.getElementById('componentPeekPanel');
+      if (!panel) return;
+      const messages = Array.isArray(data?.messages) ? data.messages : [];
+      const modeLabel = mode === 'deadletter' ? 'Dead-letter queue' : 'Primary queue';
+      if (messages.length === 0) {
+        panel.innerHTML = `<div class="empty">${escapeHtml(modeLabel)} vuota o nessun messaggio visibile al peek.</div>`;
+        return;
+      }
+
+      panel.innerHTML = `
+        <div class="peek-summary">
+          <strong>${escapeHtml(modeLabel)}</strong> · ${messages.length}/${data.requestedMessages ?? messages.length} messaggi · ${escapeHtml(new Date(data.performedAt).toLocaleString())}
+        </div>
+        <div class="peek-list">
+          ${messages.map((m, idx) => renderPeekItem(m, idx)).join('')}
+        </div>
+      `;
+
+      panel.querySelectorAll('[data-action="copy-body"]').forEach(btn =>
+        btn.addEventListener('click', () => copyBody(btn.getAttribute('data-body'))));
+    }
+
+    function renderPeekItem(message, index) {
+      const props = message.applicationProperties || {};
+      const propRows = Object.entries(props).slice(0, 8)
+        .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
+        .join('');
+      return `
+        <details class="peek-item" ${index === 0 ? 'open' : ''}>
+          <summary>
+            <span><code>#${message.sequenceNumber}</code> · ${escapeHtml(message.messageId || 'no messageId')}</span>
+            <span>${escapeHtml(message.subject || message.correlationId || '')}</span>
+          </summary>
+          <div class="peek-meta">
+            <div><strong>Correlation</strong>: ${escapeHtml(message.correlationId || '—')}</div>
+            <div><strong>Session</strong>: ${escapeHtml(message.sessionId || '—')}</div>
+            <div><strong>Enqueued</strong>: ${message.enqueuedTimeUtc ? new Date(message.enqueuedTimeUtc).toLocaleString() : '—'}</div>
+            <div><strong>DeliveryCount</strong>: ${escapeHtml(String(message.deliveryCount ?? '—'))}</div>
+            <div><strong>ContentType</strong>: ${escapeHtml(message.contentType || '—')}</div>
+            ${message.deadLetterReason ? `<div><strong>DLQ reason</strong>: ${escapeHtml(message.deadLetterReason)}</div>` : ''}
+            ${message.deadLetterErrorDescription ? `<div><strong>DLQ detail</strong>: ${escapeHtml(message.deadLetterErrorDescription)}</div>` : ''}
+          </div>
+          <div class="peek-body">
+            <pre>${escapeHtml(message.bodyPreview || '')}</pre>
+            <div class="peek-actions">
+              <button type="button" data-action="copy-body" data-body="${escapeHtml(message.bodyPreview || '')}">Copy body</button>
+            </div>
+          </div>
+          ${propRows ? `
+            <table class="kv peek-props">
+              <tr><th colspan="2">Application properties</th></tr>
+              ${propRows}
+            </table>` : '<div class="empty">Nessuna application property.</div>'}
+        </details>
+      `;
     }
 
     // ─── search / trace / device ────────────────────────────────────────────

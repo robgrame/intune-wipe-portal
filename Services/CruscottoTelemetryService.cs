@@ -129,6 +129,48 @@ public sealed class CruscottoTelemetryService
             PerformedAt: DateTimeOffset.UtcNow);
     }
 
+    public async Task<QueuePeekResult> PeekQueueAsync(string queueName, int top, bool deadLetterQueue, CancellationToken ct)
+    {
+        if (_sbClient is null)
+            throw new InvalidOperationException("Service Bus data client is not configured.");
+
+        if (string.IsNullOrWhiteSpace(queueName) || !FlowQueues.Contains(queueName, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException($"Queue '{queueName}' is not allowed.", nameof(queueName));
+
+        var take = Math.Clamp(top, 1, 25);
+        var messages = new List<QueuePeekMessage>(take);
+
+        await using var receiver = _sbClient.CreateReceiver(queueName, new ServiceBusReceiverOptions
+        {
+            SubQueue = deadLetterQueue ? SubQueue.DeadLetter : SubQueue.None,
+        });
+
+        long? fromSequenceNumber = null;
+        while (messages.Count < take)
+        {
+            var chunk = Math.Min(10, take - messages.Count);
+            var peeked = await receiver.PeekMessagesAsync(chunk, fromSequenceNumber, ct);
+            if (peeked.Count == 0)
+                break;
+
+            foreach (var message in peeked)
+            {
+                messages.Add(MapPeekMessage(message));
+                fromSequenceNumber = message.SequenceNumber + 1;
+                if (messages.Count >= take)
+                    break;
+            }
+        }
+
+        return new QueuePeekResult(
+            QueueName: queueName,
+            IsDeadLetterQueue: deadLetterQueue,
+            RequestedMessages: take,
+            RetrievedMessages: messages.Count,
+            PerformedAt: DateTimeOffset.UtcNow,
+            Messages: messages.ToArray());
+    }
+
     // ─── Overview snapshot ────────────────────────────────────────────────────
 
     public async Task<DashboardSnapshot> SnapshotAsync(CancellationToken ct)
@@ -633,6 +675,43 @@ public sealed class CruscottoTelemetryService
         public string? LastTerminalState { get; init; }
         public int ActionSequence { get; init; }
     }
+
+    private static QueuePeekMessage MapPeekMessage(ServiceBusReceivedMessage message)
+    {
+        var applicationProperties = message.ApplicationProperties.Count == 0
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : message.ApplicationProperties.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value?.ToString() ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+
+        return new QueuePeekMessage(
+            SequenceNumber: message.SequenceNumber,
+            MessageId: message.MessageId,
+            CorrelationId: NullIfEmpty(message.CorrelationId),
+            Subject: NullIfEmpty(message.Subject),
+            SessionId: NullIfEmpty(message.SessionId),
+            EnqueuedTimeUtc: message.EnqueuedTime == DateTimeOffset.MinValue ? null : message.EnqueuedTime,
+            DeliveryCount: message.DeliveryCount,
+            ContentType: NullIfEmpty(message.ContentType),
+            BodyPreview: TruncateBody(message.Body.ToString(), 2000),
+            BodyLength: message.Body.ToString().Length,
+            DeadLetterReason: NullIfEmpty(message.DeadLetterReason),
+            DeadLetterErrorDescription: NullIfEmpty(message.DeadLetterErrorDescription),
+            ApplicationProperties: applicationProperties);
+    }
+
+    private static string TruncateBody(string? body, int maxChars)
+    {
+        if (string.IsNullOrEmpty(body))
+            return string.Empty;
+
+        return body.Length <= maxChars
+            ? body
+            : body[..maxChars] + "…";
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }
 
 // ─── Public DTOs ─────────────────────────────────────────────────────────────
@@ -655,6 +734,29 @@ public sealed record QueuePurgeResult(
     int DrainedMessages,
     bool LimitReached,
     DateTimeOffset PerformedAt);
+
+public sealed record QueuePeekResult(
+    string QueueName,
+    bool IsDeadLetterQueue,
+    int RequestedMessages,
+    int RetrievedMessages,
+    DateTimeOffset PerformedAt,
+    IReadOnlyList<QueuePeekMessage> Messages);
+
+public sealed record QueuePeekMessage(
+    long SequenceNumber,
+    string MessageId,
+    string? CorrelationId,
+    string? Subject,
+    string? SessionId,
+    DateTimeOffset? EnqueuedTimeUtc,
+    int DeliveryCount,
+    string? ContentType,
+    string BodyPreview,
+    int BodyLength,
+    string? DeadLetterReason,
+    string? DeadLetterErrorDescription,
+    IReadOnlyDictionary<string, string> ApplicationProperties);
 
 public sealed record StuckLedgerEntry(
     string IntuneDeviceId, string CorrelationId, DateTimeOffset IssuedAt, double AgeHours);

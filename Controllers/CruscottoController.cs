@@ -74,6 +74,24 @@ public sealed class CruscottoController : ControllerBase
         }
     }
 
+    [HttpGet("queues/{queueName}/peek")]
+    [Authorize(Policy = "CanRead")]
+    public async Task<IActionResult> PeekQueue([FromRoute] string queueName, [FromQuery] int top = 10, [FromQuery] bool deadLetter = false, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(queueName))
+            return BadRequest(new { message = "'queueName' è richiesto" });
+
+        try
+        {
+            var result = await _svc.PeekQueueAsync(queueName, top, deadLetter, ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     public sealed record ResetBody(string? IntuneDeviceId, string? Reason);
     public sealed record PurgeQueueBody(string? QueueName, int? MaxMessages);
 }
