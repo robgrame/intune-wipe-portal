@@ -1,6 +1,9 @@
 using IntuneWipePortal.Services;
+using IntuneWipePortal.Hubs;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace IntuneWipePortal.Controllers;
 
@@ -117,4 +120,49 @@ public sealed class CruscottoController : ControllerBase
     public sealed record ResetBody(string? IntuneDeviceId, string? Reason);
     public sealed record PurgeQueueBody(string? QueueName, int? MaxMessages, bool DeadLetter = false);
     public sealed record RestartFunctionBody(string? FunctionAppName);
+
+    [HttpPost("eventgrid/webhook")]
+    [AllowAnonymous]
+    public async Task<IActionResult> EventGridWebhook(
+        [FromBody] JsonElement eventsPayload,
+        [FromServices] IHubContext<CruscottoHub> hub,
+        CancellationToken ct)
+    {
+        var aegType = Request.Headers["aeg-event-type"].ToString();
+        if (string.Equals(aegType, "SubscriptionValidation", StringComparison.OrdinalIgnoreCase))
+        {
+            if (TryGetValidationCode(eventsPayload, out var code))
+            {
+                return Ok(new { validationResponse = code });
+            }
+
+            return BadRequest(new { message = "subscription validation payload missing validationCode" });
+        }
+
+        if (string.Equals(aegType, "Notification", StringComparison.OrdinalIgnoreCase))
+        {
+            var snapshot = await _svc.SnapshotAsync(ct);
+            await hub.Clients.All.SendAsync("snapshot", snapshot, cancellationToken: ct);
+            return Ok(new { accepted = true });
+        }
+
+        return Ok(new { accepted = true });
+    }
+
+    private static bool TryGetValidationCode(JsonElement payload, out string? validationCode)
+    {
+        validationCode = null;
+        if (payload.ValueKind != JsonValueKind.Array || payload.GetArrayLength() == 0)
+            return false;
+
+        var first = payload[0];
+        if (!first.TryGetProperty("data", out var data))
+            return false;
+
+        if (!data.TryGetProperty("validationCode", out var codeNode))
+            return false;
+
+        validationCode = codeNode.GetString();
+        return !string.IsNullOrWhiteSpace(validationCode);
+    }
 }
