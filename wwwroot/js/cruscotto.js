@@ -28,6 +28,8 @@
     let selectedPeekMode = 'primary';
     let selectedPeekTop = 10;
     let peekRequestToken = 0;
+    let pollTimer = null;
+    let realtimeConnection = null;
     let interactionsBound = false;
 
     function setNodeClass(id, cls) {
@@ -860,5 +862,60 @@
         document.getElementById('liveDot').style.background = 'var(--red)';
       }
     }
+
+    function ensurePolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(tick, REFRESH_MS);
+    }
+
+    function stopPolling() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    async function startRealtime() {
+      if (!window.signalR || realtimeConnection) {
+        ensurePolling();
+        return;
+      }
+
+      realtimeConnection = new signalR.HubConnectionBuilder()
+        .withUrl('/hubs/cruscotto')
+        .withAutomaticReconnect()
+        .build();
+
+      realtimeConnection.on('snapshot', snapshot => {
+        render(snapshot);
+      });
+
+      realtimeConnection.onreconnecting(() => {
+        setText('lastUpdate', 'riconnessione realtime…');
+        ensurePolling();
+      });
+
+      realtimeConnection.onreconnected(() => {
+        setText('lastUpdate', 'realtime riconnesso');
+        stopPolling();
+      });
+
+      realtimeConnection.onclose(() => {
+        realtimeConnection = null;
+        ensurePolling();
+        setTimeout(startRealtime, 3000);
+      });
+
+      try {
+        await realtimeConnection.start();
+        setText('lastUpdate', 'realtime attivo');
+        stopPolling();
+      } catch (e) {
+        realtimeConnection = null;
+        ensurePolling();
+        setText('lastUpdate', 'realtime non disponibile, fallback polling');
+      }
+    }
+
     tick();
-    setInterval(tick, REFRESH_MS);
+    ensurePolling();
+    startRealtime();

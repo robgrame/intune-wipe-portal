@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.Monitor.Query;
+using IntuneWipePortal.Hubs;
 using IntuneWipePortal.Services;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
@@ -81,6 +82,8 @@ builder.Services.AddSingleton<CruscottoTelemetryService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<CapabilityRegistry>();
 builder.Services.AddSingleton<WipeScheduleService>();
+builder.Services.AddHostedService<CruscottoRealtimeBroadcaster>();
+builder.Services.AddSignalR();
 
 // --- Razor components (Interactive Server) + cascading auth state so
 // AuthorizeView / AuthorizeRouteView work end-to-end.
@@ -116,6 +119,7 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapControllers(); // Microsoft.Identity.Web sign-in callback
+app.MapHub<CruscottoHub>("/hubs/cruscotto").RequireAuthorization("CanRead");
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
