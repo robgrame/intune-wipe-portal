@@ -430,32 +430,54 @@ public sealed class CruscottoTelemetryService
             AppEvents
             | where TimeGenerated > ago(7d)
             | where Name in ('action.request.accepted','action.dispatch.received','wipe.action.consumed','action.already-issued')
-            | where tostring(Properties.deviceName) =~ '{key}'
+            | where tolower(tostring(Properties.deviceName)) has tolower('{key}')
                or tolower(tostring(Properties.intuneDeviceId)) == tolower('{key}')
             | extend corr = tostring(Properties.correlationId),
                      device = tostring(Properties.deviceName),
-                     intune = tostring(Properties.intuneDeviceId)
-            | summarize firstSeen = min(TimeGenerated), lastEvent = arg_max(TimeGenerated, Name) by corr, device, intune
-            | order by firstSeen desc
-            | take {Math.Clamp(take, 1, 100)}
+                     intune = tostring(Properties.intuneDeviceId),
+                     ts = TimeGenerated,
+                     evt = Name
+            | project corr, device, intune, ts, evt
+            | order by ts desc
+            | take {Math.Clamp(take, 1, 500)}
         ";
         try
         {
             var result = await _logs.QueryWorkspaceAsync(_workspaceId, q, new QueryTimeRange(TimeSpan.FromDays(7)), cancellationToken: ct);
-            var rows = new List<DeviceRequestRow>();
+            var events = new List<(string Corr, string? Device, string? Intune, DateTimeOffset Ts, string Evt)>();
             foreach (var r in result.Value.Table.Rows)
             {
-                var firstSeen = r[1] is DateTimeOffset dto ? dto : new DateTimeOffset((DateTime)r[1]!, TimeSpan.Zero);
-                var ts = r[3] is DateTimeOffset dto2 ? dto2 : new DateTimeOffset((DateTime)r[3]!, TimeSpan.Zero);
-                rows.Add(new DeviceRequestRow(
-                    CorrelationId: r[0]?.ToString() ?? "",
-                    DeviceName: r[2]?.ToString(),
-                    IntuneDeviceId: r[3]?.ToString(),
-                    FirstSeen: firstSeen,
-                    LastEvent: r[4]?.ToString() ?? "",
-                    LastEventAt: ts));
+                var corr = r[0]?.ToString() ?? "";
+                if (string.IsNullOrWhiteSpace(corr)) continue;
+                var ts = r[3] is DateTimeOffset dto
+                    ? dto
+                    : (r[3] is DateTime dt ? new DateTimeOffset(dt, TimeSpan.Zero) : DateTimeOffset.MinValue);
+                if (ts == DateTimeOffset.MinValue) continue;
+                events.Add((
+                    Corr: corr,
+                    Device: r[1]?.ToString(),
+                    Intune: r[2]?.ToString(),
+                    Ts: ts,
+                    Evt: r[4]?.ToString() ?? ""));
             }
-            return rows;
+
+            return events
+                .GroupBy(e => e.Corr, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    var last = g.OrderByDescending(x => x.Ts).First();
+                    var first = g.OrderBy(x => x.Ts).First();
+                    return new DeviceRequestRow(
+                        CorrelationId: g.Key,
+                        DeviceName: last.Device,
+                        IntuneDeviceId: last.Intune,
+                        FirstSeen: first.Ts,
+                        LastEvent: last.Evt,
+                        LastEventAt: last.Ts);
+                })
+                .OrderByDescending(r => r.FirstSeen)
+                .Take(Math.Clamp(take, 1, 100))
+                .ToArray();
         }
         catch (Exception ex)
         {
