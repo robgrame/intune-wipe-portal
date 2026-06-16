@@ -11,7 +11,7 @@
 *@
 
 <HeadContent>
-    <link rel="stylesheet" href="@Assets["css/cruscotto.css"]" />
+    <link rel="stylesheet" href="@($"{Assets["css/cruscotto.css"]}?v=20260616-1")" />
 </HeadContent>
 
 <PageTitle>Cruscotto pipeline</PageTitle>
@@ -238,4 +238,4 @@
 
 <footer>Refresh ogni <span id="refreshSec">5</span>s · sorgenti: ServiceBus admin + Ledger blob + KQL (App Insights) · portale operatore</footer>
 
-<script src="@Assets["js/cruscotto.js"]"></script>
+<script src="@($"{Assets["js/cruscotto.js"]}?v=20260616-1")"></script>
