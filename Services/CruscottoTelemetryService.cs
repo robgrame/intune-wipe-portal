@@ -265,7 +265,70 @@ public sealed class CruscottoTelemetryService
             Ledger: ledger,
             Diagnostics: diag,
             Warnings: warnings.ToArray(),
-            DeniedRequests: _metricsCollector.GetDeniedEvents());
+            DeniedRequests: await GetDeniedEventsWithFallbackAsync(ct));
+    }
+
+    /// <summary>
+    /// Returns denied events from the in-memory collector, falling back to App Insights KQL
+    /// when the collector is empty (e.g. after portal restart).
+    /// </summary>
+    private async Task<IReadOnlyList<DeniedEvent>> GetDeniedEventsWithFallbackAsync(CancellationToken ct)
+    {
+        var inMemory = _metricsCollector.GetDeniedEvents();
+        if (inMemory.Count > 0) return inMemory;
+
+        // Fallback: query App Insights for denied events from the last hour
+        if (_logs is null || string.IsNullOrEmpty(_workspaceId)) return inMemory;
+
+        try
+        {
+            const string query = @"
+                AppEvents
+                | where TimeGenerated > ago(1h)
+                | where Name has '.denied'
+                | project TimeGenerated,
+                          eventName = Name,
+                          deviceName = tostring(Properties.deviceName),
+                          correlationId = tostring(Properties.correlationId),
+                          actionType = tostring(Properties.actionType),
+                          reason = tostring(Properties.reason)
+                | order by TimeGenerated desc
+                | take 20
+            ";
+            var result = await _logs.QueryWorkspaceAsync(_workspaceId, query, new QueryTimeRange(TimeSpan.FromHours(1)), cancellationToken: ct);
+            var fallback = new List<DeniedEvent>();
+            foreach (var row in result.Value.Table.Rows)
+            {
+                var ts = row[0] is DateTimeOffset dto ? dto : (row[0] is DateTime dt ? new DateTimeOffset(dt, TimeSpan.Zero) : DateTimeOffset.UtcNow);
+                var eventName = row[1]?.ToString() ?? "(unknown)";
+                var deviceName = row[2]?.ToString();
+                var correlationId = row[3]?.ToString();
+                var actionType = row[4]?.ToString();
+                var reason = row[5]?.ToString();
+
+                if (string.IsNullOrWhiteSpace(reason))
+                {
+                    reason = eventName switch
+                    {
+                        var e when e.Contains("not-in-allowed-group", StringComparison.OrdinalIgnoreCase) => "Device non nel gruppo autorizzato",
+                        var e when e.Contains("group-check-failed", StringComparison.OrdinalIgnoreCase) => "Verifica gruppo fallita",
+                        var e when e.Contains("not-in-entra", StringComparison.OrdinalIgnoreCase) => "Device non registrato in Entra ID",
+                        var e when e.Contains("ownership-mismatch", StringComparison.OrdinalIgnoreCase) => "Device non appartiene all'utente richiedente",
+                        var e when e.Contains("rate-limited", StringComparison.OrdinalIgnoreCase) => "Troppi tentativi (rate limit)",
+                        var e when e.Contains("device-resolve-failed", StringComparison.OrdinalIgnoreCase) => "Risoluzione device fallita",
+                        _ => eventName
+                    };
+                }
+
+                fallback.Add(new DeniedEvent(ts, eventName, "kql-fallback", deviceName, correlationId, reason, actionType));
+            }
+            return fallback;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Cruscotto: denied events KQL fallback failed");
+            return inMemory;
+        }
     }
 
     private async Task<IReadOnlyList<QueueStatus>> LoadQueuesAsync(CancellationToken ct)

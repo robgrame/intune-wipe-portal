@@ -100,6 +100,7 @@
       const wEl = document.getElementById('warnings');
       const ws = [...(data.warnings || [])];
       const denied = data.deniedRequests || [];
+      console.log('[cruscotto] deniedRequests:', denied.length, denied.length > 0 ? denied[0] : '(empty)');
       if (denied.length > 0) {
         ws.unshift(`\u{1F5D1} ${denied.length} richiesta/e NEGATA/E nell'ultima ora (click sul nodo Denied per dettagli)`);
       }
@@ -111,6 +112,14 @@
           const d = document.createElement('div');
           d.className = 'warn' + (w.startsWith('Queue') && w.includes('backlog') ? ' warn-yellow' : w.includes('NEGATA') ? ' warn-red' : '');
           d.textContent = w;
+          if (w.includes('NEGATA')) {
+            d.style.cursor = 'pointer';
+            d.title = 'Clicca per vedere i dettagli';
+            d.addEventListener('click', () => {
+              const bin = document.getElementById('deniedBin');
+              if (bin) bin.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+          }
           wEl.appendChild(d);
         }
       }
