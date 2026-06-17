@@ -47,7 +47,7 @@ else
     <div class="row g-3 mb-4">
         @KpiCard("Richieste totali", _kpis.TotalRequests, "primary")
         @KpiCard("Accettate", _kpis.Accepted, "success")
-        @KpiCard("Negate", _kpis.Denied, "warning")
+        @KpiCardClickable("Negate", _kpis.Denied, "warning", () => _showDeniedPanel = !_showDeniedPanel)
         @KpiCard("Inviate", _kpis.TotalIssued, "info")
         @KpiCard("Completate", _kpis.ActionCompleted, "success")
         @KpiCard("Fallite", _kpis.ActionFailed, "danger")
@@ -58,6 +58,64 @@ else
         @KpiCard("Fail permanenti", _kpis.TotalPermanentFailures, "danger")
         @KpiCard("Poll timeout", _kpis.ActionPollTimeout, "warning")
     </div>
+
+    @if (_showDeniedPanel)
+    {
+        <div class="alert alert-warning mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">🚫 Richieste negate — dettaglio (24h)</h5>
+                <button type="button" class="btn-close" @onclick="() => _showDeniedPanel = false"></button>
+            </div>
+            @if (_deniedDetails is null || _deniedDetails.Count == 0)
+            {
+                <p class="text-muted mb-0">Nessun evento denied nel periodo.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Timestamp (UTC)</th>
+                                <th>Device</th>
+                                <th>Capability</th>
+                                <th>Motivo</th>
+                                <th>Evento</th>
+                                <th>Trail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var d in _deniedDetails)
+                        {
+                            <tr>
+                                <td>@d.Timestamp.UtcDateTime.ToString("u")</td>
+                                <td>@(d.DeviceName ?? "—")</td>
+                                <td>@(d.ActionType ?? "—")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(d.Reason))
+                                    {
+                                        @d.Reason
+                                    }
+                                    else
+                                    {
+                                        <code class="text-muted">@FriendlyDenyReason(d.EventName)</code>
+                                    }
+                                </td>
+                                <td><code>@d.EventName</code></td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(d.CorrelationId))
+                                    {
+                                        <a href="@($"/audit/{d.CorrelationId}")">@d.CorrelationId</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
 
     @if (_capability.IsAll && _kpis.PerCapability.Count > 0)
     {
@@ -241,9 +299,11 @@ else
     private CapabilityDescriptor _capability = CapabilityDescriptor.All;
     private KpiSummary? _kpis;
     private IReadOnlyList<DenyBreakdownRow>? _denies;
+    private IReadOnlyList<AuditEventRow>? _deniedDetails;
     private IReadOnlyList<RecentEventDisplayRow>? _recent;
     private IReadOnlyList<InFlightActionRow>? _inFlight;
     private string? _loadError;
+    private bool _showDeniedPanel;
     private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
@@ -275,6 +335,7 @@ else
             var window = TimeSpan.FromHours(24);
             _kpis     = await Audit.GetKpisAsync(window, _capability, default);
             _denies   = await Audit.GetDenyBreakdownAsync(window, _capability, default);
+            _deniedDetails = await Audit.GetRecentDeniedEventsAsync(50, window, _capability, default);
             var recentRaw = await Audit.GetRecentEventsAsync(120, window, _capability, default);
             _recent   = BuildRecentDisplayRows(recentRaw, 20);
             _inFlight = await Audit.GetInFlightActionsAsync(window, _capability, default);
@@ -297,6 +358,42 @@ else
                     </div>
                 </div>
             </div>");
+    };
+
+    private RenderFragment KpiCardClickable(string title, long value, string color, Action onClick) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "col-md-2 col-6");
+        builder.AddAttribute(2, "style", "cursor:pointer;");
+        builder.AddAttribute(3, "title", "Clicca per vedere i dettagli");
+        builder.AddAttribute(4, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, onClick));
+
+        builder.AddMarkupContent(5, $@"
+            <div class='card text-bg-{color} h-100' style='border:2px dashed rgba(0,0,0,0.2);'>
+                <div class='card-body'>
+                    <div class='small text-uppercase'>{title} 🔍</div>
+                    <div class='display-6'>{value}</div>
+                </div>
+            </div>");
+
+        builder.CloseElement();
+    };
+
+    private static string FriendlyDenyReason(string eventName) => eventName switch
+    {
+        var e when e.Contains("not-in-allowed-group") => "Device non nel gruppo autorizzato",
+        var e when e.Contains("group-check-failed") => "Verifica gruppo fallita",
+        var e when e.Contains("not-in-entra") => "Device non registrato in Entra ID",
+        var e when e.Contains("ownership-mismatch") => "Device non appartiene all'utente",
+        var e when e.Contains("rate-limited") => "Rate limit superato",
+        var e when e.Contains("device-resolve-failed") => "Risoluzione device fallita",
+        var e when e.Contains("managed-device-resolve-failed") => "Device gestito non trovato",
+        var e when e.Contains("already-issued") => "Azione già emessa",
+        var e when e.Contains("in-progress-elsewhere") => "Azione già in corso",
+        var e when e.Contains("missing-hardware-hash") => "Hardware hash mancante",
+        var e when e.Contains("missing-serial") => "Seriale mancante",
+        var e when e.Contains("name-collision") => "Collisione nome device",
+        _ => eventName
     };
 
     private static IReadOnlyList<RecentEventDisplayRow> BuildRecentDisplayRows(IReadOnlyList<AuditEventRow> recentRaw, int take)

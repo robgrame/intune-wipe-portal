@@ -158,6 +158,43 @@ public sealed class AuditQueryService
             r => new DenyBreakdownRow(r.GetString("Name") ?? "", r.GetInt64("Count") ?? 0));
     }
 
+    public async Task<IReadOnlyList<AuditEventRow>> GetRecentDeniedEventsAsync(
+        int take, TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
+    {
+        var actionTypeClause = capability.ActionTypeValue is null
+            ? "| where true"
+            : $"| where tostring(Properties.actionType) == \"{capability.ActionTypeValue}\"";
+
+        var query = $$"""
+            AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name startswith "action.denied."
+            {{actionTypeClause}}
+            | project TimeGenerated,
+                      Name,
+                      correlationId = tostring(Properties.correlationId),
+                      actionType    = tostring(Properties.actionType),
+                      deviceName    = tostring(Properties.deviceName),
+                      intuneDeviceId= tostring(Properties.intuneDeviceId),
+                      entraDeviceId = tostring(Properties.entraDeviceId),
+                      reason        = tostring(Properties.reason)
+            | order by TimeGenerated desc
+            | take {{take}}
+            """;
+
+        return await ExecuteAsync(query, window, ct,
+            r => new AuditEventRow(
+                r.GetDateTimeOffset("TimeGenerated") ?? DateTimeOffset.MinValue,
+                r.GetString("Name") ?? "",
+                r.GetString("correlationId") ?? "",
+                r.GetString("actionType"),
+                r.GetString("deviceName"),
+                r.GetString("intuneDeviceId"),
+                r.GetString("entraDeviceId"),
+                r.GetString("reason"),
+                ExceptionType: null));
+    }
+
     public async Task<IReadOnlyList<AuditEventRow>> GetRecentEventsAsync(
         int take, TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
     {
