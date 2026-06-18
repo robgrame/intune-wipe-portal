@@ -48,14 +48,23 @@ public sealed class CruscottoController : ControllerBase
 
     [HttpPost("actions/reset-ledger")]
     [Authorize(Policy = "CanScheduleWrite")]
-    public IActionResult ResetLedger([FromBody] ResetBody body)
+    public async Task<IActionResult> ResetLedger([FromBody] ResetBody body, CancellationToken ct)
     {
         if (body is null || string.IsNullOrWhiteSpace(body.IntuneDeviceId) || string.IsNullOrWhiteSpace(body.Reason))
             return BadRequest(new { message = "'intuneDeviceId' e 'reason' sono richiesti" });
-        return StatusCode(501, new
+
+        try
         {
-            message = "Reset ledger non implementato dal portale. Usare l'endpoint admin del Web Function API (mTLS) per preservare la separazione di responsabilità.",
-        });
+            var (deleted, archivedAs) = await _svc.ResetLedgerEntryAsync(body.IntuneDeviceId, body.Reason, ct);
+            if (!deleted)
+                return NotFound(new { message = $"Nessuna entry trovata per {body.IntuneDeviceId}" });
+
+            return Ok(new { message = $"Entry {body.IntuneDeviceId} archiviata e rimossa dal ledger", archivedAs });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(503, new { message = ex.Message });
+        }
     }
 
     [HttpPost("actions/purge-queue")]

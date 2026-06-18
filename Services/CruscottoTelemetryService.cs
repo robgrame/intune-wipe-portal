@@ -435,6 +435,47 @@ public sealed class CruscottoTelemetryService
         }
     }
 
+    /// <summary>
+    /// Archives and deletes a stuck ledger entry by IntuneDeviceId.
+    /// The original blob is copied under <c>_archive/</c> before deletion.
+    /// </summary>
+    public async Task<(bool Deleted, string? ArchivedAs)> ResetLedgerEntryAsync(string intuneDeviceId, string reason, CancellationToken ct)
+    {
+        if (_ledger is null)
+            throw new InvalidOperationException("Ledger client not configured");
+
+        var blobName = $"{intuneDeviceId.ToLowerInvariant()}.json";
+        var client = _ledger.GetBlobClient(blobName);
+
+        try
+        {
+            var download = await client.DownloadContentAsync(ct);
+            var content = download.Value.Content.ToString();
+
+            // Archive under _archive/ with timestamp so we keep a record
+            var archiveName = $"_archive/{intuneDeviceId.ToLowerInvariant()}_{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.json";
+            var archivePayload = JsonSerializer.Serialize(new
+            {
+                originalContent = JsonSerializer.Deserialize<JsonElement>(content),
+                archivedAt = DateTimeOffset.UtcNow,
+                archivedReason = reason
+            });
+            await _ledger.GetBlobClient(archiveName).UploadAsync(
+                new BinaryData(archivePayload),
+                overwrite: true,
+                cancellationToken: ct);
+
+            await client.DeleteAsync(cancellationToken: ct);
+            _log.LogInformation("Ledger entry {IntuneDeviceId} archived as {Archive} and deleted (reason: {Reason})",
+                intuneDeviceId, archiveName, reason);
+            return (true, archiveName);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            return (false, null);
+        }
+    }
+
     private async Task<DiagnosticsStatus> LoadDiagnosticsAsync(CancellationToken ct)
     {
         var issues = new List<string>();

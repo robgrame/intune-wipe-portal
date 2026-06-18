@@ -299,6 +299,85 @@ else
         </table>
     }
 
+    <h2 class="h5 mt-4 d-flex align-items-center gap-2">
+        🔒 Ledger bloccate
+        @if (_stuckEntries is { Count: > 0 })
+        {
+            <span class="badge bg-danger">@_stuckEntries.Count</span>
+        }
+    </h2>
+    @if (_stuckEntries is null || _stuckEntries.Count == 0)
+    {
+        <p class="text-muted">Nessuna entry bloccata nel ledger.</p>
+    }
+    else
+    {
+        <div class="alert alert-danger">
+            <p class="mb-2">
+                <strong>Queste azioni sono state emesse ma non hanno mai ricevuto un esito terminale.</strong>
+                I device coinvolti non accettano nuove azioni finché le entry non vengono archiviate.
+                Causa tipica: storage <code>publicNetworkAccess=Disabled</code> durante il polling.
+            </p>
+        </div>
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Intune Device ID</th>
+                    <th>Correlation ID</th>
+                    <th>Emessa (UTC)</th>
+                    <th class="text-end">Bloccata da</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var s in _stuckEntries)
+            {
+                <tr>
+                    <td><code>@s.IntuneDeviceId</code></td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(s.CorrelationId))
+                        {
+                            <a href="@($"/audit/{s.CorrelationId}")">@s.CorrelationId</a>
+                        }
+                    </td>
+                    <td>@s.IssuedAt.UtcDateTime.ToString("u")</td>
+                    <td class="text-end">@s.AgeHours.ToString("F1") h</td>
+                    <td>
+                        @if (_resetInProgress.Contains(s.IntuneDeviceId))
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        else if (_resetDone.Contains(s.IntuneDeviceId))
+                        {
+                            <span class="text-success">✅ Sbloccata</span>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ResetLedgerEntryAsync(s.IntuneDeviceId)">
+                                🗑️ Archivia e sblocca
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        @if (_stuckEntries.Count > 1)
+        {
+            <button class="btn btn-sm btn-danger" @onclick="ResetAllStuckAsync" disabled="@(_resetAllInProgress)">
+                @if (_resetAllInProgress)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                🗑️ Archivia e sblocca tutte (@_stuckEntries.Count)
+            </button>
+        }
+        @if (_resetError is not null)
+        {
+            <div class="alert alert-warning mt-2">@_resetError</div>
+        }
+    }
+
     <h2 class="h5 mt-4">Deny breakdown (24h)</h2>
     @if (_denies is null || _denies.Count == 0)
     {
@@ -420,12 +499,17 @@ else
     private IReadOnlyList<AuditEventRow>? _failedDetails;
     private IReadOnlyList<RecentEventDisplayRow>? _recent;
     private IReadOnlyList<InFlightActionRow>? _inFlight;
+    private IReadOnlyList<StuckLedgerEntry>? _stuckEntries;
     private HealthSummary? _health;
     private LatencyStats? _latency;
     private string? _loadError;
     private bool _showDeniedPanel;
     private bool _showFailedPanel;
     private bool _showHealthDetail;
+    private readonly HashSet<string> _resetInProgress = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _resetDone = new(StringComparer.OrdinalIgnoreCase);
+    private bool _resetAllInProgress;
+    private string? _resetError;
     private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
@@ -492,6 +576,9 @@ else
     {
         var snapshot = await Cruscotto.SnapshotAsync(default);
         var issues = new List<HealthIssue>();
+
+        // Populate stuck entries for the management panel
+        _stuckEntries = snapshot.Ledger.TopStuck;
 
         // Check DLQ
         foreach (var q in snapshot.Queues.Where(q => q.DeadLetter > 0))
@@ -692,4 +779,67 @@ else
         IReadOnlyList<AuditEventRow>? GroupedEvents);
 
     public void Dispose() => _timer?.Dispose();
+
+    private async Task ResetLedgerEntryAsync(string intuneDeviceId)
+    {
+        _resetError = null;
+        _resetInProgress.Add(intuneDeviceId);
+        StateHasChanged();
+
+        try
+        {
+            var (deleted, _) = await Cruscotto.ResetLedgerEntryAsync(
+                intuneDeviceId, "Archiviata manualmente dall'operatore via dashboard", default);
+            if (deleted)
+            {
+                _resetDone.Add(intuneDeviceId);
+            }
+            else
+            {
+                _resetError = $"Entry {intuneDeviceId} non trovata (già rimossa?).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _resetError = $"Errore reset {intuneDeviceId}: {ex.Message}";
+        }
+        finally
+        {
+            _resetInProgress.Remove(intuneDeviceId);
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResetAllStuckAsync()
+    {
+        if (_stuckEntries is null) return;
+        _resetAllInProgress = true;
+        _resetError = null;
+        StateHasChanged();
+
+        var errors = new List<string>();
+        foreach (var s in _stuckEntries)
+        {
+            if (_resetDone.Contains(s.IntuneDeviceId)) continue;
+            try
+            {
+                var (deleted, _) = await Cruscotto.ResetLedgerEntryAsync(
+                    s.IntuneDeviceId, "Archiviata manualmente (bulk) dall'operatore via dashboard", default);
+                if (deleted)
+                    _resetDone.Add(s.IntuneDeviceId);
+                else
+                    errors.Add($"{s.IntuneDeviceId}: non trovata");
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{s.IntuneDeviceId}: {ex.Message}");
+            }
+            StateHasChanged();
+        }
+
+        _resetAllInProgress = false;
+        if (errors.Count > 0)
+            _resetError = string.Join("; ", errors);
+        StateHasChanged();
+    }
 }
