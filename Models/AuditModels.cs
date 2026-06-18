@@ -1,3 +1,5 @@
+using IntuneWipePortal.Services;
+
 namespace IntuneWipePortal.Models;
 
 /// <summary>
@@ -89,3 +91,24 @@ public sealed record InFlightActionRow(
     DateTimeOffset LastUpdate,
     string CurrentState,
     int MinutesSinceIssued);
+
+/// <summary>
+/// Aggregate health summary for the banner on the dashboard Home page.
+/// </summary>
+public sealed record HealthSummary(
+    NodeHealth OverallStatus,
+    string StatusLabel,
+    IReadOnlyList<HealthIssue> Issues);
+
+public sealed record HealthIssue(
+    string Severity,   // "critical", "warning", "info"
+    string Icon,
+    string Message);
+
+/// <summary>
+/// Average latency from request acceptance to terminal state.
+/// </summary>
+public sealed record LatencyStats(
+    double? AvgMinutes,
+    double? P95Minutes,
+    long SampleCount);

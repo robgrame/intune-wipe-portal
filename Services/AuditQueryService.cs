@@ -405,4 +405,84 @@ public sealed class AuditQueryService
         : ts.TotalHours >= 1
             ? $"{(int)ts.TotalHours}h"
             : $"{(int)ts.TotalMinutes}m";
+
+    /// <summary>
+    /// Returns average and P95 latency (minutes) from request acceptance to terminal state.
+    /// </summary>
+    public async Task<LatencyStats> GetLatencyAsync(TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
+    {
+        var actionTypeClause = capability.ActionTypeValue is null
+            ? "| where true"
+            : $"| where actionType == \"{capability.ActionTypeValue}\"";
+
+        var query = $$"""
+            let accepted = AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name == "action.request.accepted"
+            | extend corr = tostring(Properties.correlationId), actionType = tostring(Properties.actionType)
+            {{actionTypeClause}}
+            | project corr, acceptedAt = TimeGenerated;
+            let terminal = AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name in ("action.completed", "action.failed", "action.poll-timeout") or Name startswith "action.denied."
+            | extend corr = tostring(Properties.correlationId)
+            | project corr, terminalAt = TimeGenerated;
+            accepted
+            | join kind=inner terminal on corr
+            | extend latencyMin = datetime_diff('second', terminalAt, acceptedAt) / 60.0
+            | where latencyMin >= 0 and latencyMin < 1440
+            | summarize AvgMin = avg(latencyMin), P95Min = percentile(latencyMin, 95), Samples = count()
+            """;
+
+        var rows = await ExecuteAsync(query, window, ct, r => new LatencyStats(
+            AvgMinutes: r.GetDouble("AvgMin"),
+            P95Minutes: r.GetDouble("P95Min"),
+            SampleCount: r.GetInt64("Samples") ?? 0));
+
+        return rows.Count > 0 ? rows[0] : new LatencyStats(null, null, 0);
+    }
+
+    /// <summary>
+    /// Returns recent failed events (action.failed, permanent failures, exceptions) with details.
+    /// </summary>
+    public async Task<IReadOnlyList<AuditEventRow>> GetRecentFailedEventsAsync(
+        int take, TimeSpan window, CapabilityDescriptor capability, CancellationToken ct)
+    {
+        var actionTypeClause = capability.ActionTypeValue is null
+            ? "| where true"
+            : $"| where tostring(Properties.actionType) == \"{capability.ActionTypeValue}\"";
+
+        var query = $$"""
+            AppEvents
+            | where TimeGenerated > ago({{ToKql(window)}})
+            | where Name == "action.failed"
+                or Name == "action.poll-timeout"
+                or Name has ".error"
+                or Name has ".failed"
+            {{actionTypeClause}}
+            | project TimeGenerated,
+                      Name,
+                      correlationId = tostring(Properties.correlationId),
+                      actionType    = tostring(Properties.actionType),
+                      deviceName    = tostring(Properties.deviceName),
+                      intuneDeviceId= tostring(Properties.intuneDeviceId),
+                      entraDeviceId = tostring(Properties.entraDeviceId),
+                      reason        = coalesce(tostring(Properties.reason), tostring(Properties.exceptionMessage), tostring(Properties.graphErrorMsg)),
+                      exType        = tostring(Properties.exceptionType)
+            | order by TimeGenerated desc
+            | take {{take}}
+            """;
+
+        return await ExecuteAsync(query, window, ct,
+            r => new AuditEventRow(
+                r.GetDateTimeOffset("TimeGenerated") ?? DateTimeOffset.MinValue,
+                r.GetString("Name") ?? "",
+                r.GetString("correlationId") ?? "",
+                r.GetString("actionType"),
+                r.GetString("deviceName"),
+                r.GetString("intuneDeviceId"),
+                r.GetString("entraDeviceId"),
+                r.GetString("reason"),
+                r.GetString("exType")));
+    }
 }

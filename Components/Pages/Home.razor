@@ -1,6 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @inject AuditQueryService Audit
+@inject CruscottoTelemetryService Cruscotto
 @inject CapabilityRegistry CapRegistry
 @implements IDisposable
 
@@ -38,6 +39,55 @@ else
     </div>
 }
 
+@* ── Health Banner ── *@
+@if (_health is not null)
+{
+    var bannerCss = _health.OverallStatus switch
+    {
+        NodeHealth.Green => "alert-success",
+        NodeHealth.Yellow => "alert-warning",
+        NodeHealth.Red => "alert-danger",
+        _ => "alert-secondary"
+    };
+    var bannerIcon = _health.OverallStatus switch
+    {
+        NodeHealth.Green => "✅",
+        NodeHealth.Yellow => "⚠️",
+        NodeHealth.Red => "🚨",
+        _ => "❔"
+    };
+    <div class="alert @bannerCss mb-3 d-flex align-items-center justify-content-between" style="cursor:pointer" @onclick="() => _showHealthDetail = !_showHealthDetail">
+        <div>
+            <strong>@bannerIcon @_health.StatusLabel</strong>
+            @if (_health.Issues.Count > 0)
+            {
+                <span class="ms-2 text-muted">(@_health.Issues.Count problema/i rilevato/i — clicca per dettagli)</span>
+            }
+        </div>
+        <small class="text-muted">infra health</small>
+    </div>
+    @if (_showHealthDetail && _health.Issues.Count > 0)
+    {
+        <div class="card mb-3">
+            <div class="card-body p-2">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th></th><th>Problema</th></tr></thead>
+                    <tbody>
+                    @foreach (var issue in _health.Issues)
+                    {
+                        var rowCss = issue.Severity == "critical" ? "table-danger" : issue.Severity == "warning" ? "table-warning" : "";
+                        <tr class="@rowCss">
+                            <td>@issue.Icon</td>
+                            <td>@issue.Message</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
 @if (_kpis is null)
 {
     <p><em>Loading...</em></p>
@@ -50,13 +100,18 @@ else
         @KpiCardClickable("Negate", _kpis.Denied, "warning", () => _showDeniedPanel = !_showDeniedPanel)
         @KpiCard("Inviate", _kpis.TotalIssued, "info")
         @KpiCard("Completate", _kpis.ActionCompleted, "success")
-        @KpiCard("Fallite", _kpis.ActionFailed, "danger")
+        @KpiCardClickable("Fallite", _kpis.ActionFailed, "danger", () => _showFailedPanel = !_showFailedPanel)
     </div>
 
     <div class="row g-3 mb-4">
         @KpiCard("Errori transient", _kpis.TotalTransientErrors, "secondary")
         @KpiCard("Fail permanenti", _kpis.TotalPermanentFailures, "danger")
         @KpiCard("Poll timeout", _kpis.ActionPollTimeout, "warning")
+        @if (_latency is not null && _latency.SampleCount > 0)
+        {
+            @KpiCardText("Latenza media", $"{_latency.AvgMinutes:F1} min", "info")
+            @KpiCardText("Latenza P95", $"{_latency.P95Minutes:F1} min", "info")
+        }
     </div>
 
     @if (_showDeniedPanel)
@@ -106,6 +161,68 @@ else
                                     @if (!string.IsNullOrEmpty(d.CorrelationId))
                                     {
                                         <a href="@($"/audit/{d.CorrelationId}")">@d.CorrelationId</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_showFailedPanel)
+    {
+        <div class="alert alert-danger mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">💀 Azioni fallite — dettaglio (24h)</h5>
+                <button type="button" class="btn-close" @onclick="() => _showFailedPanel = false"></button>
+            </div>
+            @if (_failedDetails is null || _failedDetails.Count == 0)
+            {
+                <p class="text-muted mb-0">Nessuna azione fallita nel periodo.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Timestamp (UTC)</th>
+                                <th>Device</th>
+                                <th>Capability</th>
+                                <th>Motivo / Eccezione</th>
+                                <th>Evento</th>
+                                <th>Trail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var f in _failedDetails)
+                        {
+                            <tr>
+                                <td>@f.Timestamp.UtcDateTime.ToString("u")</td>
+                                <td>@(f.DeviceName ?? "—")</td>
+                                <td>@(f.ActionType ?? "—")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(f.Reason))
+                                    {
+                                        @f.Reason
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(f.ExceptionType))
+                                    {
+                                        <code class="text-muted">@f.ExceptionType</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td><code>@FriendlyFailReason(f.EventName)</code></td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(f.CorrelationId))
+                                    {
+                                        <a href="@($"/audit/{f.CorrelationId}")">@f.CorrelationId</a>
                                     }
                                 </td>
                             </tr>
@@ -300,10 +417,15 @@ else
     private KpiSummary? _kpis;
     private IReadOnlyList<DenyBreakdownRow>? _denies;
     private IReadOnlyList<AuditEventRow>? _deniedDetails;
+    private IReadOnlyList<AuditEventRow>? _failedDetails;
     private IReadOnlyList<RecentEventDisplayRow>? _recent;
     private IReadOnlyList<InFlightActionRow>? _inFlight;
+    private HealthSummary? _health;
+    private LatencyStats? _latency;
     private string? _loadError;
     private bool _showDeniedPanel;
+    private bool _showFailedPanel;
+    private bool _showHealthDetail;
     private System.Threading.Timer? _timer;
 
     protected override async Task OnInitializedAsync()
@@ -324,7 +446,7 @@ else
     {
         if (cap.ActionTypeValue == _capability.ActionTypeValue) return;
         _capability = cap;
-        _kpis = null; _denies = null; _recent = null; _inFlight = null;
+        _kpis = null; _denies = null; _recent = null; _inFlight = null; _failedDetails = null;
         await LoadAsync();
     }
 
@@ -333,18 +455,96 @@ else
         try
         {
             var window = TimeSpan.FromHours(24);
-            _kpis     = await Audit.GetKpisAsync(window, _capability, default);
-            _denies   = await Audit.GetDenyBreakdownAsync(window, _capability, default);
-            _deniedDetails = await Audit.GetRecentDeniedEventsAsync(50, window, _capability, default);
-            var recentRaw = await Audit.GetRecentEventsAsync(120, window, _capability, default);
-            _recent   = BuildRecentDisplayRows(recentRaw, 20);
-            _inFlight = await Audit.GetInFlightActionsAsync(window, _capability, default);
+            var kpiTask = Audit.GetKpisAsync(window, _capability, default);
+            var deniesTask = Audit.GetDenyBreakdownAsync(window, _capability, default);
+            var deniedDetailsTask = Audit.GetRecentDeniedEventsAsync(50, window, _capability, default);
+            var failedDetailsTask = Audit.GetRecentFailedEventsAsync(50, window, _capability, default);
+            var recentTask = Audit.GetRecentEventsAsync(120, window, _capability, default);
+            var inFlightTask = Audit.GetInFlightActionsAsync(window, _capability, default);
+            var latencyTask = Audit.GetLatencyAsync(window, _capability, default);
+
+            await Task.WhenAll(kpiTask, deniesTask, deniedDetailsTask, failedDetailsTask, recentTask, inFlightTask, latencyTask);
+
+            _kpis = await kpiTask;
+            _denies = await deniesTask;
+            _deniedDetails = await deniedDetailsTask;
+            _failedDetails = await failedDetailsTask;
+            var recentRaw = await recentTask;
+            _recent = BuildRecentDisplayRows(recentRaw, 20);
+            _inFlight = await inFlightTask;
+            _latency = await latencyTask;
             _loadError = null;
         }
         catch (Exception ex)
         {
             _loadError = ex.Message;
         }
+
+        // Load infra health (independent — non-fatal if it fails)
+        try
+        {
+            _health = await BuildHealthSummaryAsync();
+        }
+        catch { _health = null; }
+    }
+
+    private async Task<HealthSummary> BuildHealthSummaryAsync()
+    {
+        var snapshot = await Cruscotto.SnapshotAsync(default);
+        var issues = new List<HealthIssue>();
+
+        // Check DLQ
+        foreach (var q in snapshot.Queues.Where(q => q.DeadLetter > 0))
+            issues.Add(new HealthIssue("critical", "💀", $"Coda '{q.Name}' ha {q.DeadLetter} messaggi in Dead Letter Queue"));
+
+        // Check queue backlog
+        foreach (var q in snapshot.Queues.Where(q => q.Active >= 20))
+            issues.Add(new HealthIssue("warning", "📥", $"Coda '{q.Name}' ha {q.Active} messaggi in attesa — possibile backlog"));
+
+        // Check ledger stuck
+        if (snapshot.Ledger.StuckEntries > 0)
+            issues.Add(new HealthIssue("warning", "🔒", $"{snapshot.Ledger.StuckEntries} entry nel ledger bloccate da oltre {snapshot.Ledger.GraceHours}h — i device coinvolti non accettano nuove azioni"));
+
+        // Check ledger error
+        if (snapshot.Ledger.Error is not null)
+            issues.Add(new HealthIssue("critical", "⚠️", $"Ispezione ledger fallita: {snapshot.Ledger.Error}"));
+
+        // Check Function Apps
+        foreach (var (role, fa) in snapshot.Diagnostics.FunctionApps)
+        {
+            if (fa.Health == NodeHealth.Red)
+                issues.Add(new HealthIssue("critical", "🔴", $"Function App '{fa.AppName}' in stato critico: {fa.LastError ?? "nessun dettaglio"}"));
+            else if (fa.Health == NodeHealth.Yellow)
+                issues.Add(new HealthIssue("warning", "🟡", $"Function App '{fa.AppName}' degradata (errori recenti: {fa.Failures30m})"));
+        }
+
+        // Check poller
+        if (snapshot.Diagnostics.PollerHealth == NodeHealth.Red)
+            issues.Add(new HealthIssue("critical", "⏱️", "Status poller fermo — nessuna invocazione recente"));
+        else if (snapshot.Diagnostics.PollerHealth == NodeHealth.Yellow)
+            issues.Add(new HealthIssue("warning", "⏱️", "Status poller rallentato"));
+
+        // Check denied (last hour)
+        if (snapshot.DeniedRequests.Count >= 5)
+            issues.Add(new HealthIssue("warning", "🚫", $"{snapshot.DeniedRequests.Count} richieste negate nell'ultima ora — verificare autorizzazioni dispositivi"));
+
+        // Diagnostics issues
+        foreach (var d in snapshot.Diagnostics.Issues)
+            issues.Add(new HealthIssue("info", "ℹ️", d));
+
+        var overall = issues.Any(i => i.Severity == "critical") ? NodeHealth.Red
+                    : issues.Any(i => i.Severity == "warning") ? NodeHealth.Yellow
+                    : NodeHealth.Green;
+
+        var label = overall switch
+        {
+            NodeHealth.Green => "Infrastruttura operativa — tutto regolare",
+            NodeHealth.Yellow => "Attenzione — problemi minori rilevati",
+            NodeHealth.Red => "Critico — intervento richiesto",
+            _ => "Stato sconosciuto"
+        };
+
+        return new HealthSummary(overall, label, issues);
     }
 
     private static RenderFragment KpiCard(string title, long value, string color) => builder =>
@@ -394,6 +594,28 @@ else
         var e when e.Contains("missing-serial") => "Seriale mancante",
         var e when e.Contains("name-collision") => "Collisione nome device",
         _ => eventName
+    };
+
+    private static string FriendlyFailReason(string eventName) => eventName switch
+    {
+        "action.failed" => "Azione fallita",
+        "action.poll-timeout" => "Timeout polling stato",
+        var e when e.Contains(".error") => "Errore",
+        var e when e.Contains(".failed") => "Fallita",
+        _ => eventName
+    };
+
+    private static RenderFragment KpiCardText(string title, string text, string color) => builder =>
+    {
+        builder.AddMarkupContent(0, $@"
+            <div class='col-md-2 col-6'>
+                <div class='card text-bg-{color} h-100'>
+                    <div class='card-body'>
+                        <div class='small text-uppercase'>{title}</div>
+                        <div class='h4 mb-0'>{text}</div>
+                    </div>
+                </div>
+            </div>");
     };
 
     private static IReadOnlyList<RecentEventDisplayRow> BuildRecentDisplayRows(IReadOnlyList<AuditEventRow> recentRaw, int take)
