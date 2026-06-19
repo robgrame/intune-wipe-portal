@@ -24,46 +24,66 @@ else
         <!-- Certificati -->
         <fieldset class="mb-4">
             <legend>🔐 Certificati CA</legend>
+            <p class="text-muted small">
+                Carica i file <code>.cer</code> delle CA fidate. Il sistema determina automaticamente se si tratta di una Root CA
+                (Subject = Issuer) o una Subordinate CA ed estrae Subject, Thumbprint e contenuto Base64.
+            </p>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">
-                    Subject Root CA
-                    <i class="bi bi-info-circle text-muted ms-1" role="img"
-                       title="Distinguished Name (Subject) delle Root CA e Subordinate CA fidate. Usato per verificare che la chain del certificato client sia stata emessa da una CA autorizzata. Separare più DN con il carattere pipe (|) perché il DN stesso contiene virgole."></i>
-                </label>
-                <input type="text" class="form-control" @bind="_trustedCaSubjects"
-                       placeholder="CN=Root CA, O=Corp|CN=Issuing CA, O=Corp" />
+                <label class="form-label fw-bold">Carica certificati (.cer / .crt)</label>
+                <InputFile OnChange="OnCertFilesSelected" multiple accept=".cer,.crt"
+                           class="form-control" />
             </div>
 
-            <div class="mb-3">
-                <label class="form-label fw-bold">
-                    Thumbprint CA (SHA1)
-                    <i class="bi bi-info-circle text-muted ms-1" role="img"
-                       title="Thumbprint SHA1 (hex, 40 caratteri) delle CA fidate. Almeno uno deve essere presente nella chain del certificato client. Usato come controllo aggiuntivo rispetto al Subject per prevenire CA con stesso DN ma chiave diversa."></i>
-                </label>
-                <input type="text" class="form-control" @bind="_trustedCaThumbprints"
-                       placeholder="AABBCCDD...,11223344..." />
-            </div>
+            @if (_certError is not null)
+            {
+                <div class="alert alert-warning py-1">@_certError</div>
+            }
 
-            <div class="mb-3">
-                <label class="form-label fw-bold">
-                    Certificato Root CA (Base64 DER)
-                    <i class="bi bi-info-circle text-muted ms-1" role="img"
-                       title="Certificato della Root CA in formato Base64 (senza header/footer PEM). Usato come trust anchor per costruire la chain X.509 completa. Più certificati separati da virgola."></i>
-                </label>
-                <textarea class="form-control font-monospace" rows="4" @bind="_trustedRootCerts"
-                          placeholder="MIIBxTCCAW..."></textarea>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label fw-bold">
-                    Certificato Subordinate CA (Base64 DER)
-                    <i class="bi bi-info-circle text-muted ms-1" role="img"
-                       title="Certificato della Subordinate/Issuing CA in formato Base64. Usato come path hint per completare la chain quando il client non invia i certificati intermedi. Più certificati separati da virgola."></i>
-                </label>
-                <textarea class="form-control font-monospace" rows="4" @bind="_trustedIntermediateCerts"
-                          placeholder="MIICpTCCAY..."></textarea>
-            </div>
+            @if (_parsedCerts.Count > 0)
+            {
+                <table class="table table-sm table-bordered align-middle mb-3">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Subject</th>
+                            <th>Thumbprint (SHA1)</th>
+                            <th>Scadenza</th>
+                            <th style="width:50px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cert in _parsedCerts)
+                        {
+                            <tr class="@(cert.IsExpired ? "table-danger" : "")">
+                                <td>
+                                    <span class="badge bg-@(cert.IsRoot ? "dark" : "secondary")">
+                                        @(cert.IsRoot ? "Root CA" : "Sub CA")
+                                    </span>
+                                </td>
+                                <td class="small">@cert.Subject</td>
+                                <td><code class="small">@cert.Thumbprint</code></td>
+                                <td class="small @(cert.IsExpired ? "text-danger fw-bold" : "")">
+                                    @cert.NotAfter.ToString("yyyy-MM-dd")
+                                    @if (cert.IsExpired) { <span> ⚠️</span> }
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveCert(cert)"
+                                            title="Rimuovi">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="alert alert-light border small py-2">
+                    <i class="bi bi-info-circle"></i> Nessun certificato CA configurato. Carica almeno una Root CA.
+                </div>
+            }
 
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch" id="chkCrl" @bind="_checkRevocation" />
@@ -303,10 +323,8 @@ else
     private string? _error;
 
     // Certificati
-    private string _trustedCaSubjects = "";
-    private string _trustedCaThumbprints = "";
-    private string _trustedRootCerts = "";
-    private string _trustedIntermediateCerts = "";
+    private List<ParsedCert> _parsedCerts = new();
+    private string? _certError;
     private bool _checkRevocation;
     private string _revocationMode = "Online";
 
@@ -371,10 +389,14 @@ else
         {
             var values = await AppConfig.GetManyAsync(Keys);
 
-            _trustedCaSubjects = values.GetValueOrDefault("ClientCert:TrustedCaSubjects") ?? "";
-            _trustedCaThumbprints = values.GetValueOrDefault("ClientCert:TrustedCaThumbprints") ?? "";
-            _trustedRootCerts = values.GetValueOrDefault("ClientCert:TrustedRootCertificates") ?? "";
-            _trustedIntermediateCerts = values.GetValueOrDefault("ClientCert:TrustedIntermediateCertificates") ?? "";
+            // Reconstruct parsed certs from stored Base64
+            _parsedCerts = new List<ParsedCert>();
+            var rootB64 = values.GetValueOrDefault("ClientCert:TrustedRootCertificates") ?? "";
+            var subB64 = values.GetValueOrDefault("ClientCert:TrustedIntermediateCertificates") ?? "";
+            foreach (var b64 in rootB64.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                TryAddCertFromBase64(b64, forceRoot: true);
+            foreach (var b64 in subB64.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                TryAddCertFromBase64(b64, forceRoot: false);
             _checkRevocation = bool.TryParse(values.GetValueOrDefault("ClientCert:CheckRevocation"), out var cr) && cr;
             _revocationMode = values.GetValueOrDefault("ClientCert:RevocationMode") ?? "Online";
 
@@ -417,12 +439,16 @@ else
         _error = null;
         try
         {
+            var roots = _parsedCerts.Where(c => c.IsRoot).ToList();
+            var subs = _parsedCerts.Where(c => !c.IsRoot).ToList();
+            var allCerts = _parsedCerts;
+
             var settings = new Dictionary<string, string>
             {
-                ["ClientCert:TrustedCaSubjects"] = _trustedCaSubjects,
-                ["ClientCert:TrustedCaThumbprints"] = _trustedCaThumbprints,
-                ["ClientCert:TrustedRootCertificates"] = _trustedRootCerts,
-                ["ClientCert:TrustedIntermediateCertificates"] = _trustedIntermediateCerts,
+                ["ClientCert:TrustedCaSubjects"] = string.Join("|", allCerts.Select(c => c.Subject)),
+                ["ClientCert:TrustedCaThumbprints"] = string.Join(",", allCerts.Select(c => c.Thumbprint)),
+                ["ClientCert:TrustedRootCertificates"] = string.Join(",", roots.Select(c => c.Base64)),
+                ["ClientCert:TrustedIntermediateCertificates"] = string.Join(",", subs.Select(c => c.Base64)),
                 ["ClientCert:CheckRevocation"] = _checkRevocation.ToString().ToLower(),
                 ["ClientCert:RevocationMode"] = _revocationMode,
                 ["Actions:AllowedTypes"] = _allowedTypes,
@@ -525,5 +551,109 @@ else
         public string GroupName { get; set; } = "";
         public bool ShowDropdown { get; set; }
         public List<GroupLookupResult> SearchResults { get; set; } = new();
+    }
+
+    // ---- Certificate upload & parsing -----------------------------------
+
+    private async Task OnCertFilesSelected(InputFileChangeEventArgs e)
+    {
+        _certError = null;
+        var maxSize = 50 * 1024; // 50 KB max per cert file
+        foreach (var file in e.GetMultipleFiles(20))
+        {
+            try
+            {
+                using var ms = new System.IO.MemoryStream();
+                await file.OpenReadStream(maxSize).CopyToAsync(ms);
+                var bytes = ms.ToArray();
+
+                // Try parse as DER or PEM
+                var cert = ParseCertBytes(bytes);
+                if (cert is null)
+                {
+                    _certError = $"File '{file.Name}' non e' un certificato valido.";
+                    continue;
+                }
+
+                // Avoid duplicates by thumbprint
+                if (_parsedCerts.Any(c => c.Thumbprint == cert.Thumbprint))
+                    continue;
+
+                _parsedCerts.Add(cert);
+            }
+            catch (Exception ex)
+            {
+                _certError = $"Errore nel file '{file.Name}': {ex.Message}";
+            }
+        }
+    }
+
+    private static ParsedCert? ParseCertBytes(byte[] bytes)
+    {
+        System.Security.Cryptography.X509Certificates.X509Certificate2? x509 = null;
+        try
+        {
+            x509 = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(bytes);
+        }
+        catch
+        {
+            try
+            {
+                var pem = System.Text.Encoding.ASCII.GetString(bytes);
+                x509 = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(pem);
+            }
+            catch { return null; }
+        }
+
+        if (x509 is null) return null;
+
+        var isRoot = string.Equals(x509.Subject, x509.Issuer, StringComparison.OrdinalIgnoreCase);
+        var b64 = Convert.ToBase64String(x509.RawData);
+
+        return new ParsedCert
+        {
+            Subject = x509.Subject,
+            Issuer = x509.Issuer,
+            Thumbprint = x509.Thumbprint,
+            Base64 = b64,
+            NotAfter = x509.NotAfter,
+            IsRoot = isRoot,
+        };
+    }
+
+    private void TryAddCertFromBase64(string b64, bool forceRoot)
+    {
+        try
+        {
+            var bytes = Convert.FromBase64String(b64);
+            var x509 = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(bytes);
+            if (_parsedCerts.Any(c => c.Thumbprint == x509.Thumbprint))
+                return;
+
+            var isRoot = forceRoot || string.Equals(x509.Subject, x509.Issuer, StringComparison.OrdinalIgnoreCase);
+            _parsedCerts.Add(new ParsedCert
+            {
+                Subject = x509.Subject,
+                Issuer = x509.Issuer,
+                Thumbprint = x509.Thumbprint,
+                Base64 = b64,
+                NotAfter = x509.NotAfter,
+                IsRoot = isRoot,
+            });
+        }
+        catch { /* skip invalid stored cert */ }
+    }
+
+    private void RemoveCert(ParsedCert cert) => _parsedCerts.Remove(cert);
+
+    private sealed class ParsedCert
+    {
+        public string Subject { get; set; } = "";
+        public string Issuer { get; set; } = "";
+        public string Thumbprint { get; set; } = "";
+        public string Base64 { get; set; } = "";
+        public DateTime NotAfter { get; set; }
+        public bool IsRoot { get; set; }
+        public bool IsExpired => NotAfter < DateTime.UtcNow;
     }
 }
