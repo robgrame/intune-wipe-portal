@@ -12,10 +12,13 @@ public sealed class AppConfigManagementService
 {
     private readonly ConfigurationClient _client;
     private readonly ILogger<AppConfigManagementService> _log;
+    private readonly PortalEventTracker _tracker;
 
-    public AppConfigManagementService(IConfiguration config, TokenCredential credential, ILogger<AppConfigManagementService> log)
+    public AppConfigManagementService(IConfiguration config, TokenCredential credential,
+        ILogger<AppConfigManagementService> log, PortalEventTracker tracker)
     {
         _log = log;
+        _tracker = tracker;
         var endpoint = config["AppConfig:Endpoint"]
             ?? throw new InvalidOperationException("AppConfig:Endpoint not configured");
         _client = new ConfigurationClient(new Uri(endpoint), credential);
@@ -32,13 +35,27 @@ public sealed class AppConfigManagementService
         {
             return null;
         }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to read AppConfig key {Key}.", key);
+            throw;
+        }
     }
 
     public async Task SetAsync(string key, string value, string? label = null, CancellationToken ct = default)
     {
-        var setting = new ConfigurationSetting(key, value, label);
-        await _client.SetConfigurationSettingAsync(setting, cancellationToken: ct);
-        _log.LogInformation("AppConfig key set: {Key} (label={Label})", key, label ?? "(none)");
+        try
+        {
+            var setting = new ConfigurationSetting(key, value, label);
+            await _client.SetConfigurationSettingAsync(setting, cancellationToken: ct);
+            _log.LogInformation("AppConfig key set: {Key} (label={Label})", key, label ?? "(none)");
+            _tracker.TrackConfigChanged(key, null);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Failed to set AppConfig key {Key}.", key);
+            throw;
+        }
     }
 
     public async Task<Dictionary<string, string?>> GetManyAsync(IEnumerable<string> keys, string? label = null, CancellationToken ct = default)

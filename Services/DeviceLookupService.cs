@@ -14,11 +14,13 @@ public sealed class DeviceLookupService
 {
     private readonly GraphServiceClient _graph;
     private readonly ILogger<DeviceLookupService> _log;
+    private readonly PortalEventTracker _tracker;
 
-    public DeviceLookupService(TokenCredential credential, ILogger<DeviceLookupService> log)
+    public DeviceLookupService(TokenCredential credential, ILogger<DeviceLookupService> log, PortalEventTracker tracker)
     {
         _graph = new GraphServiceClient(credential);
         _log = log;
+        _tracker = tracker;
     }
 
     /// <summary>
@@ -63,6 +65,9 @@ public sealed class DeviceLookupService
 
             // Best-effort: resolve Intune managed device ids in parallel
             await ResolveIntuneIdsAsync(results, ct).ConfigureAwait(false);
+
+            _log.LogInformation("Device search for '{Prefix}' returned {Count} results.", prefix, results.Count);
+            _tracker.TrackDeviceSearch(prefix, results.Count);
 
             return results;
         }
@@ -131,7 +136,7 @@ public sealed class DeviceLookupService
 
             if (resp?.Value is null) return [];
 
-            return resp.Value
+            var groupResults = resp.Value
                 .Select(g => new GroupLookupResult
                 {
                     GroupId = g.Id ?? string.Empty,
@@ -140,6 +145,11 @@ public sealed class DeviceLookupService
                     MembershipRule = g.MembershipRule,
                 })
                 .ToList();
+
+            _log.LogInformation("Group search for '{Prefix}' returned {Count} results.", prefix, groupResults.Count);
+            _tracker.TrackGroupSearch(prefix, groupResults.Count);
+
+            return groupResults;
         }
         catch (Exception ex)
         {

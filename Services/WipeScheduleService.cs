@@ -30,10 +30,12 @@ public sealed class WipeScheduleService
     private readonly TableClient _waves;
     private readonly TableClient _members;
     private readonly ILogger<WipeScheduleService> _log;
+    private readonly PortalEventTracker _tracker;
 
-    public WipeScheduleService(IConfiguration cfg, ILogger<WipeScheduleService> log)
+    public WipeScheduleService(IConfiguration cfg, ILogger<WipeScheduleService> log, PortalEventTracker tracker)
     {
         _log = log;
+        _tracker = tracker;
 
         var account = cfg["WipeSchedule:StorageAccountName"]
             ?? throw new InvalidOperationException(
@@ -199,6 +201,7 @@ public sealed class WipeScheduleService
         _log.LogInformation(
             "Schedule wave created — waveId={WaveId} name={Name} actionType={ActionType} scheduledAtUtc={ScheduledAtUtc:O} status={Status} createdBy={CreatedBy} entraGroupId={EntraGroupId}",
             id, entity.Name, entity.ActionType, entity.ScheduledAtUtc, entity.Status, createdBy ?? "<anonymous>", entity.EntraGroupId ?? "<none>");
+        _tracker.TrackWaveCreated(id, entity.Name, entity.ActionType, createdBy);
         return id;
     }
 
@@ -256,6 +259,7 @@ public sealed class WipeScheduleService
         _log.LogInformation(
             "Schedule wave updated — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status} entraGroupId={EntraGroupId}",
             waveId, w.Name, w.ScheduledAtUtc, w.Status, w.EntraGroupId ?? "<none>");
+        _tracker.TrackWaveUpdated(waveId, null);
     }
 
     public async Task DeleteWaveAsync(Guid waveId, CancellationToken ct = default)
@@ -285,6 +289,7 @@ public sealed class WipeScheduleService
         _log.LogInformation(
             "Schedule wave deleted — waveId={WaveId} membersDeleted={MemberCount}",
             waveId, memberCount);
+        _tracker.TrackWaveDeleted(waveId, null);
     }
 
     // ----- members ---------------------------------------------------------
@@ -313,6 +318,7 @@ public sealed class WipeScheduleService
         _log.LogInformation(
             "Schedule wave member added — waveId={WaveId} entraDeviceId={EntraDeviceId} deviceName={DeviceName} addedBy={AddedBy}",
             waveId, entraDeviceId, entity.DeviceName, addedBy ?? "<anonymous>");
+        _tracker.TrackMemberAdded(waveId, entity.DeviceName, entraDeviceId.ToString());
     }
 
     public async Task RemoveMemberAsync(Guid waveId, Guid entraDeviceId, CancellationToken ct = default)
@@ -427,6 +433,7 @@ public sealed class WipeScheduleService
         _log.LogInformation(
             "Schedule wave bulk-add — waveId={WaveId} added={Added} skipped={Skipped} errors={Errors} addedBy={AddedBy}",
             waveId, added, inputErrors.Count, batchErrors.Count - inputErrors.Count, addedBy ?? "<anonymous>");
+        _tracker.TrackBulkImport(waveId, added, deduped.Count - added + inputErrors.Count, batchErrors.Count);
 
         return new BulkMemberAddResult(Added: added,
             Skipped: deduped.Count - added + inputErrors.Count,
@@ -499,6 +506,7 @@ public sealed class WipeScheduleService
         _log.LogInformation(
             "Schedule wave bulk-remove — waveId={WaveId} removed={Removed} notFound={NotFound} errors={Errors}",
             waveId, removed, notFound, errors.Count);
+        _tracker.TrackMemberRemoved(waveId, removed);
         return new BulkMemberRemoveResult(removed, notFound, errors);
     }
 

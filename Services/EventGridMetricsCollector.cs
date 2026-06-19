@@ -13,14 +13,16 @@ namespace IntuneWipePortal.Services;
 public sealed class EventGridMetricsCollector
 {
     private readonly ConcurrentDictionary<string, AppMetricsBucket> _buckets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ILogger<EventGridMetricsCollector> _log;
 
     /// <summary>
     /// Well-known roles pre-seeded so the UI never shows "no data" for known apps.
     /// </summary>
     private static readonly string[] KnownRoles = { "web", "proc", "wipe", "autopilot", "bitlocker", "rename" };
 
-    public EventGridMetricsCollector()
+    public EventGridMetricsCollector(ILogger<EventGridMetricsCollector> log)
     {
+        _log = log;
         foreach (var role in KnownRoles)
             _buckets.GetOrAdd(role, _ => new AppMetricsBucket());
     }
@@ -34,11 +36,18 @@ public sealed class EventGridMetricsCollector
     /// </summary>
     public void Ingest(JsonElement eventsPayload)
     {
-        if (eventsPayload.ValueKind != JsonValueKind.Array) return;
+        if (eventsPayload.ValueKind != JsonValueKind.Array)
+        {
+            _log.LogWarning("EventGrid payload is not an array (kind={Kind}), skipping.", eventsPayload.ValueKind);
+            return;
+        }
 
+        int ingested = 0;
         foreach (var evt in eventsPayload.EnumerateArray())
         {
-            if (!evt.TryGetProperty("data", out var data)) continue;
+            try
+            {
+                if (!evt.TryGetProperty("data", out var data)) continue;
 
             var role = data.TryGetProperty("role", out var r) ? r.GetString() : null;
             if (string.IsNullOrWhiteSpace(role)) continue;
@@ -87,7 +96,17 @@ public sealed class EventGridMetricsCollector
                 while (_deniedEvents.TryPeek(out var oldest) && oldest.Timestamp < pruneThreshold)
                     _deniedEvents.TryDequeue(out _);
             }
+
+                ingested++;
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Failed to parse EventGrid event element.");
+            }
         }
+
+        if (ingested > 0)
+            _log.LogDebug("Ingested {Count} EventGrid events.", ingested);
     }
 
     /// <summary>

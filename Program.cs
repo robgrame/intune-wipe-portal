@@ -2,8 +2,10 @@ using Azure.Identity;
 using Azure.Monitor.Query;
 using IntuneWipePortal.Hubs;
 using IntuneWipePortal.Services;
+using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using intune_wipe_portal.Components;
@@ -76,6 +78,20 @@ builder.Services.AddSingleton<Azure.Core.TokenCredential>(_ =>
     }
     return new DefaultAzureCredential(credOptions);
 });
+
+// --- Application Insights SDK: server-side telemetry (requests, exceptions,
+// dependencies, custom events). The connection string comes from
+// APPLICATIONINSIGHTS_CONNECTION_STRING app setting.
+builder.Services.AddApplicationInsightsTelemetry();
+builder.Services.AddSingleton<ITelemetryInitializer, PortalTelemetryInitializer>();
+
+// Blazor circuit lifecycle tracker — captures circuit open/close/disconnect
+// events so we can diagnose "page closes after 1-2s" symptoms.
+builder.Services.AddScoped<CircuitHandler, PortalCircuitHandler>();
+
+// Custom event tracker for portal operations (wave CRUD, config, certs, etc.)
+builder.Services.AddSingleton<PortalEventTracker>();
+
 builder.Services.AddSingleton(sp => new LogsQueryClient(sp.GetRequiredService<Azure.Core.TokenCredential>()));
 builder.Services.AddSingleton<EventGridMetricsCollector>();
 builder.Services.AddSingleton<AuditQueryService>();
