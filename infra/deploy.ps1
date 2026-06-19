@@ -191,6 +191,12 @@ if ($script:NameSuffixOverridden) {
     # it as-is; Bicep then disables the separator dash via empty(nameSuffix).
     $deployParams += "nameSuffix=$NameSuffix"
 }
+# Auto-detect App Configuration endpoint from the RG (created by API infra).
+$appcfgEndpoint = (az appconfig list -g $ResourceGroup --query "[0].endpoint" -o tsv --only-show-errors 2>$null)
+if ($appcfgEndpoint) {
+    $deployParams += "appConfigEndpoint=$($appcfgEndpoint.Trim())"
+    Write-Host "    App Config: $($appcfgEndpoint.Trim())"
+}
 
 $deployment = az deployment group create `
     --resource-group $ResourceGroup `

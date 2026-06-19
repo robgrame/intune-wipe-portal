@@ -60,6 +60,9 @@ param ledgerStorageAccountName string = ''
 @description('Container name on ledgerStorageAccountName that holds the per-device ledger JSON blobs.')
 param ledgerContainerName string = 'action-ledger'
 
+@description('Endpoint of the Azure App Configuration store used by the API. The portal uses this to manage operational settings. Leave empty to disable the Configuration page.')
+param appConfigEndpoint string = ''
+
 // ---------------------------------------------------------------------------
 var suffix       = nameSuffix
 var sep          = empty(suffix) ? '' : '-'
@@ -180,6 +183,7 @@ resource web 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Cruscotto__ServiceBusFullyQualifiedNamespace', value: sbFqdnResolved }
         { name: 'Cruscotto__LedgerStorageAccount', value: ledgerAcctResolved }
         { name: 'Cruscotto__LedgerContainer',      value: ledgerContainerName }
+        { name: 'AppConfig__Endpoint',             value: appConfigEndpoint }
       ]
     }
   }
