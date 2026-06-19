@@ -177,6 +177,7 @@ public sealed class AuditQueryService
                       deviceName    = tostring(Properties.deviceName),
                       intuneDeviceId= tostring(Properties.intuneDeviceId),
                       entraDeviceId = tostring(Properties.entraDeviceId),
+                      callerUpn     = tostring(Properties.callerUpn),
                       reason        = tostring(Properties.reason)
             | order by TimeGenerated desc
             | take {{take}}
@@ -191,6 +192,7 @@ public sealed class AuditQueryService
                 r.GetString("deviceName"),
                 r.GetString("intuneDeviceId"),
                 r.GetString("entraDeviceId"),
+                r.GetString("callerUpn"),
                 r.GetString("reason"),
                 ExceptionType: null));
     }
@@ -215,9 +217,10 @@ public sealed class AuditQueryService
                      device = tostring(Properties.deviceName),
                      intune = tostring(Properties.intuneDeviceId),
                      entra  = tostring(Properties.entraDeviceId),
+                     caller = tostring(Properties.callerUpn),
                      reason = tostring(Properties.reason),
                      exType = tostring(Properties.exceptionType)
-            | project TimeGenerated, Name, corr, atype, device, intune, entra, reason, exType
+            | project TimeGenerated, Name, corr, atype, device, intune, entra, caller, reason, exType
             | order by TimeGenerated desc
             | take {{take}}
             """;
@@ -247,9 +250,10 @@ public sealed class AuditQueryService
                      device = tostring(Properties.deviceName),
                      intune = tostring(Properties.intuneDeviceId),
                      entra  = tostring(Properties.entraDeviceId),
+                     caller = tostring(Properties.callerUpn),
                      reason = tostring(Properties.reason),
                      exType = tostring(Properties.exceptionType)
-            | project TimeGenerated, Name, corr, atype, device, intune, entra, reason, exType
+            | project TimeGenerated, Name, corr, atype, device, intune, entra, caller, reason, exType
             | order by TimeGenerated asc
             """;
 
@@ -373,6 +377,7 @@ public sealed class AuditQueryService
         NullIfEmpty(r.GetString("device")),
         NullIfEmpty(r.GetString("intune")),
         NullIfEmpty(r.GetString("entra")),
+        NullIfEmpty(r.GetString("caller")),
         NullIfEmpty(r.GetString("reason")),
         NullIfEmpty(r.GetString("exType")));
 
@@ -467,6 +472,7 @@ public sealed class AuditQueryService
                       deviceName    = tostring(Properties.deviceName),
                       intuneDeviceId= tostring(Properties.intuneDeviceId),
                       entraDeviceId = tostring(Properties.entraDeviceId),
+                      callerUpn     = tostring(Properties.callerUpn),
                       reason        = coalesce(tostring(Properties.reason), tostring(Properties.exceptionMessage), tostring(Properties.graphErrorMsg)),
                       exType        = tostring(Properties.exceptionType)
             | order by TimeGenerated desc
@@ -482,6 +488,7 @@ public sealed class AuditQueryService
                 r.GetString("deviceName"),
                 r.GetString("intuneDeviceId"),
                 r.GetString("entraDeviceId"),
+                r.GetString("callerUpn"),
                 r.GetString("reason"),
                 r.GetString("exType")));
     }

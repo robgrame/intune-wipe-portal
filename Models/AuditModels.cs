@@ -75,6 +75,7 @@ public sealed record AuditEventRow(
     string? DeviceName,
     string? IntuneDeviceId,
     string? EntraDeviceId,
+    string? CallerUpn,
     string? Reason,
     string? ExceptionType);
 

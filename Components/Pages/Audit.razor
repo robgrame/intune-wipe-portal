@@ -52,6 +52,7 @@
                         <th>Evento</th>
                         <th>Capability</th>
                         <th>Device</th>
+                        <th>Caller</th>
                         <th>Intune ID</th>
                         <th>Entra ID</th>
                         <th>Reason / Exception</th>
@@ -65,6 +66,7 @@
                         <td><code>@e.EventName</code></td>
                         <td>@(e.ActionType ?? "-")</td>
                         <td>@(e.DeviceName ?? "-")</td>
+                        <td class="small">@(e.CallerUpn ?? "-")</td>
                         <td><code class="small">@(e.IntuneDeviceId ?? "-")</code></td>
                         <td><code class="small">@(e.EntraDeviceId ?? "-")</code></td>
                         <td>@(e.Reason ?? e.ExceptionType ?? "-")</td>
@@ -112,6 +114,7 @@ else
                         <th>Evento</th>
                         <th>Capability</th>
                         <th>Device</th>
+                        <th>Caller</th>
                         <th>Reason</th>
                         <th>Trail</th>
                     </tr>
@@ -131,6 +134,7 @@ else
                         <td><code class="small">@e.EventName</code></td>
                         <td>@(e.ActionType ?? "-")</td>
                         <td>@(e.DeviceName ?? "-")</td>
+                        <td class="small">@(e.CallerUpn ?? "-")</td>
                         <td class="small">@(e.Reason ?? e.ExceptionType ?? "-")</td>
                         <td>
                             @if (!string.IsNullOrEmpty(e.CorrelationId))
