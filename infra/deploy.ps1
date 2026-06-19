@@ -73,7 +73,9 @@ param(
     [string] $EntraTenantId,
     [string] $EntraClientId,
     [SecureString] $EntraClientSecret,
-    [switch] $RequireAssignment
+    [switch] $RequireAssignment,
+    # Skip infra (Bicep) + Entra reply URL update. Only build & zip deploy the app code.
+    [switch] $SkipInfra
 )
 
 $ErrorActionPreference = 'Stop'
@@ -121,6 +123,19 @@ if (-not $law) {
 Write-Host "    Workspace customerId: $($law.customerId)"
 
 # --- Step 1: app registration ----------------------------------------------
+if ($SkipInfra) {
+    Write-Host ""
+    Write-Host "==> Skipping app registration + Bicep (SkipInfra). Code-only deploy."
+    # Resolve the web app name from the existing deployment.
+    $webAppName = (& az webapp list -g $ResourceGroup `
+        --query "[?contains(name, '$NamePrefix-portal')].name | [0]" `
+        -o tsv --only-show-errors)
+    if (-not $webAppName) {
+        throw "Cannot find existing portal web app matching '$NamePrefix-portal*' in $ResourceGroup. Run without -SkipInfra first."
+    }
+    $webAppName = $webAppName.Trim()
+    Write-Host "    Target app: $webAppName"
+} else {
 if (-not $SkipAppRegistration) {
     Write-Host ""
     Write-Host "==> Ensuring Entra app registration..."
@@ -192,6 +207,8 @@ Write-Host ""
 Write-Host "==> Updating Entra reply URLs to https://$hostname/signin-oidc..."
 az ad app update --id $EntraClientId `
     --web-redirect-uris "https://$hostname/signin-oidc" "https://$hostname/signout-callback-oidc" | Out-Null
+
+} # end of: } else { (not SkipInfra)
 
 # --- Step 4: build & deploy app code ---------------------------------------
 Write-Host ""
