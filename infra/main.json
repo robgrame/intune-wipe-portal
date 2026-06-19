@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1342652298071597379"
+      "templateHash": "5404028493903919623"
     }
   },
   "parameters": {
@@ -104,6 +104,27 @@
       "defaultValue": "action-ledger",
       "metadata": {
         "description": "Container name on ledgerStorageAccountName that holds the per-device ledger JSON blobs."
+      }
+    },
+    "appConfigEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Endpoint of the Azure App Configuration store used by the API. The portal uses this to manage operational settings. Leave empty to disable the Configuration page."
+      }
+    },
+    "wipeScheduleStorageAccount": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the storage account hosting the wipe schedule tables (wipeschedulewaves, wipeschedulemembers). Usually the Web role storage account."
+      }
+    },
+    "appInsightsName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the existing App Insights resource (created by intune-device-actions). Leave empty to skip AI instrumentation."
       }
     }
   },
@@ -205,64 +226,7 @@
           "ftpsState": "Disabled",
           "alwaysOn": "[not(equals(parameters('appServicePlanSku'), 'B1'))]",
           "use32BitWorkerProcess": false,
-          "appSettings": [
-            {
-              "name": "AZURE_CLIENT_ID",
-              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').clientId]"
-            },
-            {
-              "name": "Monitor__WorkspaceId",
-              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').customerId]"
-            },
-            {
-              "name": "AzureAd__Instance",
-              "value": "https://login.microsoftonline.com/"
-            },
-            {
-              "name": "AzureAd__Domain",
-              "value": "[parameters('entraDomain')]"
-            },
-            {
-              "name": "AzureAd__TenantId",
-              "value": "[parameters('entraTenantId')]"
-            },
-            {
-              "name": "AzureAd__ClientId",
-              "value": "[parameters('entraClientId')]"
-            },
-            {
-              "name": "AzureAd__ClientSecret",
-              "value": "[parameters('entraClientSecret')]"
-            },
-            {
-              "name": "AzureAd__CallbackPath",
-              "value": "/signin-oidc"
-            },
-            {
-              "name": "AzureAd__SignedOutCallbackPath",
-              "value": "/signout-callback-oidc"
-            },
-            {
-              "name": "ASPNETCORE_FORWARDEDHEADERS_ENABLED",
-              "value": "true"
-            },
-            {
-              "name": "WEBSITE_RUN_FROM_PACKAGE",
-              "value": "1"
-            },
-            {
-              "name": "Cruscotto__ServiceBusFullyQualifiedNamespace",
-              "value": "[variables('sbFqdnResolved')]"
-            },
-            {
-              "name": "Cruscotto__LedgerStorageAccount",
-              "value": "[variables('ledgerAcctResolved')]"
-            },
-            {
-              "name": "Cruscotto__LedgerContainer",
-              "value": "[parameters('ledgerContainerName')]"
-            }
-          ]
+          "appSettings": "[flatten(createArray(createArray(createObject('name', 'AZURE_CLIENT_ID', 'value', reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').clientId), createObject('name', 'Monitor__WorkspaceId', 'value', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').customerId), createObject('name', 'AzureAd__Instance', 'value', 'https://login.microsoftonline.com/'), createObject('name', 'AzureAd__Domain', 'value', parameters('entraDomain')), createObject('name', 'AzureAd__TenantId', 'value', parameters('entraTenantId')), createObject('name', 'AzureAd__ClientId', 'value', parameters('entraClientId')), createObject('name', 'AzureAd__ClientSecret', 'value', parameters('entraClientSecret')), createObject('name', 'AzureAd__CallbackPath', 'value', '/signin-oidc'), createObject('name', 'AzureAd__SignedOutCallbackPath', 'value', '/signout-callback-oidc'), createObject('name', 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', 'value', 'true'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1'), createObject('name', 'Cruscotto__ServiceBusFullyQualifiedNamespace', 'value', variables('sbFqdnResolved')), createObject('name', 'Cruscotto__LedgerStorageAccount', 'value', variables('ledgerAcctResolved')), createObject('name', 'Cruscotto__LedgerContainer', 'value', parameters('ledgerContainerName')), createObject('name', 'AppConfig__Endpoint', 'value', parameters('appConfigEndpoint')), createObject('name', 'WipeSchedule__StorageAccountName', 'value', parameters('wipeScheduleStorageAccount'))), if(empty(parameters('appInsightsName')), createArray(), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').ConnectionString), createObject('name', 'ASPNETCORE_DETAILEDERRORS', 'value', 'true')))))]"
         }
       },
       "dependsOn": [

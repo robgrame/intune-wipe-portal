@@ -66,6 +66,9 @@ param appConfigEndpoint string = ''
 @description('Name of the storage account hosting the wipe schedule tables (wipeschedulewaves, wipeschedulemembers). Usually the Web role storage account.')
 param wipeScheduleStorageAccount string = ''
 
+@description('Name of the existing App Insights resource (created by intune-device-actions). Leave empty to skip AI instrumentation.')
+param appInsightsName string = ''
+
 // ---------------------------------------------------------------------------
 var suffix       = nameSuffix
 var sep          = empty(suffix) ? '' : '-'
@@ -138,6 +141,12 @@ resource ledgerReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04
   }
 }
 
+// Reference the EXISTING App Insights resource (owned by the API repo deployment).
+// The portal uses the SDK-side telemetry pipeline; only the connection string is needed.
+resource ai 'Microsoft.Insights/components@2020-02-02' existing = if (!empty(appInsightsName)) {
+  name: appInsightsName
+}
+
 // ---------------------------------------------------------------------------
 // App Service Plan — Linux. Dedicated to the portal so it doesn't share
 // host VMs with the wipe Function Apps (defense-in-depth: a hypothetical
@@ -188,6 +197,12 @@ resource web 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Cruscotto__LedgerContainer',      value: ledgerContainerName }
         { name: 'AppConfig__Endpoint',             value: appConfigEndpoint }
         { name: 'WipeSchedule__StorageAccountName', value: wipeScheduleStorageAccount }
+        // App Insights: server-side SDK telemetry (requests, exceptions, custom events).
+        // Conditional: only set when appInsightsName is provided.
+        ...(empty(appInsightsName) ? [] : [
+          { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: ai!.properties.ConnectionString }
+          { name: 'ASPNETCORE_DETAILEDERRORS',             value: 'true' }
+        ])
       ]
     }
   }

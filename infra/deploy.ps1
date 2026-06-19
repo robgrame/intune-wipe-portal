@@ -75,7 +75,9 @@ param(
     [SecureString] $EntraClientSecret,
     [switch] $RequireAssignment,
     # Skip infra (Bicep) + Entra reply URL update. Only build & zip deploy the app code.
-    [switch] $SkipInfra
+    [switch] $SkipInfra,
+    # Name of the App Insights resource (created by the API deployment). Auto-detected if empty.
+    [string] $AppInsightsName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -203,6 +205,15 @@ $wipeStAccount = (az storage account list -g $ResourceGroup -o json --only-show-
 if ($wipeStAccount) {
     $deployParams += "wipeScheduleStorageAccount=$wipeStAccount"
     Write-Host "    Wipe Schedule SA: $wipeStAccount"
+}
+# Auto-detect App Insights from the RG (created by API infra).
+if (-not $AppInsightsName) {
+    $AppInsightsName = (az monitor app-insights component list -g $ResourceGroup --query "[0].name" -o tsv --only-show-errors 2>$null)
+    if ($AppInsightsName) { $AppInsightsName = $AppInsightsName.Trim() }
+}
+if ($AppInsightsName) {
+    $deployParams += "appInsightsName=$AppInsightsName"
+    Write-Host "    App Insights: $AppInsightsName"
 }
 
 $deployment = az deployment group create `
