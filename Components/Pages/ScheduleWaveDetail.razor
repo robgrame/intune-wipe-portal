@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @attribute [Authorize(Policy = "CanScheduleWrite")]
 @inject WipeScheduleService Svc
+@inject DeviceLookupService DeviceLookup
 @inject NavigationManager Nav
 @inject ILogger<ScheduleWaveDetail> Log
 
@@ -132,13 +133,30 @@ else
                 {
                     <EditForm Model="_addDraft" OnValidSubmit="AddMember">
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-4">
+                            <div class="col-md-4 position-relative">
                                 <label class="form-label">Device name</label>
-                                <InputText class="form-control" @bind-Value="_addDraft.DeviceName" />
+                                <input class="form-control" value="@_addDraft.DeviceName"
+                                       @oninput="OnDeviceSearchInput"
+                                       @onfocusout="OnSearchFocusOut"
+                                       placeholder="Digita almeno 2 caratteri..." autocomplete="off" />
+                                @if (_searchResults.Count > 0 && _showDropdown)
+                                {
+                                    <div class="list-group position-absolute w-100 shadow" style="z-index:1050; max-height:250px; overflow-y:auto;">
+                                        @foreach (var d in _searchResults)
+                                        {
+                                            <button type="button" class="list-group-item list-group-item-action py-1"
+                                                    @onmousedown="() => SelectDevice(d)" @onmousedown:preventDefault>
+                                                <strong>@d.DisplayName</strong>
+                                                <span class="text-muted small ms-2">@(d.OperatingSystem ?? "") @(d.OsVersion ?? "")</span>
+                                                <br /><code class="small text-secondary">@d.EntraDeviceId</code>
+                                            </button>
+                                        }
+                                    </div>
+                                }
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Entra device id (GUID)</label>
-                                <InputText class="form-control" @bind-Value="_addDraft.EntraDeviceId" />
+                                <InputText class="form-control" @bind-Value="_addDraft.EntraDeviceId" readonly="@(_addDraft.DeviceSelected)" />
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Intune device id (opt.)</label>
@@ -358,6 +376,9 @@ else
     private bool _editing;
     private WaveDraft _edit = new();
     private MemberDraft _addDraft = new();
+    private List<DeviceLookupResult> _searchResults = new();
+    private bool _showDropdown;
+    private CancellationTokenSource? _searchCts;
 
     // Bulk import state
     private enum AddTab { Single, Bulk }
@@ -468,6 +489,62 @@ else
             _error = ex.Message;
             _busy = false;
         }
+    }
+
+    // --- Device typeahead ----------------------------------------------------
+
+    private async Task OnDeviceSearchInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        _addDraft.DeviceName = value;
+        _addDraft.DeviceSelected = false;
+        _addDraft.EntraDeviceId = string.Empty;
+        _addDraft.IntuneDeviceId = null;
+
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        if (value.Length < 2)
+        {
+            _searchResults.Clear();
+            _showDropdown = false;
+            return;
+        }
+
+        // Debounce 300ms
+        try { await Task.Delay(300, token); }
+        catch (TaskCanceledException) { return; }
+
+        try
+        {
+            var results = await DeviceLookup.SearchAsync(value, 10, token);
+            if (!token.IsCancellationRequested)
+            {
+                _searchResults = results.ToList();
+                _showDropdown = _searchResults.Count > 0;
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private void SelectDevice(DeviceLookupResult device)
+    {
+        _addDraft.DeviceName = device.DisplayName;
+        _addDraft.EntraDeviceId = device.EntraDeviceId;
+        _addDraft.DeviceSelected = true;
+        _searchResults.Clear();
+        _showDropdown = false;
+    }
+
+    private void OnSearchFocusOut()
+    {
+        // Small delay to allow click on dropdown item to fire first
+        _ = Task.Delay(200).ContinueWith(_ =>
+        {
+            _showDropdown = false;
+            InvokeAsync(StateHasChanged);
+        });
     }
 
     private async Task AddMember()
@@ -639,5 +716,6 @@ else
         public string DeviceName { get; set; } = string.Empty;
         public string EntraDeviceId { get; set; } = string.Empty;
         public string? IntuneDeviceId { get; set; }
+        public bool DeviceSelected { get; set; }
     }
 }
