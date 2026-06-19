@@ -166,6 +166,7 @@ public sealed class WipeScheduleService
     /// </summary>
     public async Task<Guid> CreateWaveAsync(string name, DateTimeOffset scheduledAtUtc,
         string status, string? description, string? createdBy,
+        string actionType = "wipe",
         string? entraGroupId = null, string? entraGroupName = null,
         CancellationToken ct = default)
     {
@@ -183,7 +184,7 @@ public sealed class WipeScheduleService
         {
             PartitionKey   = WipeScheduleWaveEntity.PartitionConstant,
             RowKey         = id.ToString("D").ToLowerInvariant(),
-            ActionType     = WipeScheduleWaveEntity.ActionTypeConstant,
+            ActionType     = string.IsNullOrWhiteSpace(actionType) ? "wipe" : actionType.Trim().ToLowerInvariant(),
             Name           = name.Trim(),
             Description    = string.IsNullOrWhiteSpace(description) ? null : description!.Trim(),
             ScheduledAtUtc = scheduledAtUtc.ToUniversalTime(),
@@ -196,8 +197,8 @@ public sealed class WipeScheduleService
         };
         await _waves.AddEntityAsync(entity, ct).ConfigureAwait(false);
         _log.LogInformation(
-            "Schedule wave created — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status} createdBy={CreatedBy} entraGroupId={EntraGroupId}",
-            id, entity.Name, entity.ScheduledAtUtc, entity.Status, createdBy ?? "<anonymous>", entity.EntraGroupId ?? "<none>");
+            "Schedule wave created — waveId={WaveId} name={Name} actionType={ActionType} scheduledAtUtc={ScheduledAtUtc:O} status={Status} createdBy={CreatedBy} entraGroupId={EntraGroupId}",
+            id, entity.Name, entity.ActionType, entity.ScheduledAtUtc, entity.Status, createdBy ?? "<anonymous>", entity.EntraGroupId ?? "<none>");
         return id;
     }
 
@@ -213,6 +214,7 @@ public sealed class WipeScheduleService
     /// </summary>
     public async Task UpdateWaveAsync(Guid waveId, string name, DateTimeOffset scheduledAtUtc,
         string status, string? description,
+        string? actionType = null,
         string? entraGroupId = null, string? entraGroupName = null,
         CancellationToken ct = default)
     {
@@ -242,6 +244,8 @@ public sealed class WipeScheduleService
 
         w.Name           = name.Trim();
         w.Description    = string.IsNullOrWhiteSpace(description) ? null : description!.Trim();
+        if (!string.IsNullOrWhiteSpace(actionType))
+            w.ActionType = actionType.Trim().ToLowerInvariant();
         w.ScheduledAtUtc = scheduledAtUtc.ToUniversalTime();
         w.Status         = status.ToLowerInvariant();
         w.EntraGroupId   = string.IsNullOrWhiteSpace(entraGroupId) ? null : entraGroupId!.Trim();

@@ -108,7 +108,8 @@ public sealed class DeviceLookupService
         value.Replace("'", "''");
 
     /// <summary>
-    /// Searches Entra groups whose displayName starts with <paramref name="prefix"/>.
+    /// Searches Entra groups whose displayName contains <paramref name="prefix"/>.
+    /// Uses $search which is more reliable than startsWith for partial matches.
     /// </summary>
     public async Task<IReadOnlyList<GroupLookupResult>> SearchGroupsAsync(
         string prefix, int top = 10, CancellationToken ct = default)
@@ -120,7 +121,7 @@ public sealed class DeviceLookupService
         {
             var resp = await _graph.Groups.GetAsync(cfg =>
             {
-                cfg.QueryParameters.Filter = $"startsWith(displayName, '{EscapeOData(prefix)}')";
+                cfg.QueryParameters.Search = $"\"displayName:{EscapeOData(prefix)}\"";
                 cfg.QueryParameters.Select = new[] { "id", "displayName", "description", "membershipRule" };
                 cfg.QueryParameters.Top = top;
                 cfg.QueryParameters.Orderby = new[] { "displayName" };

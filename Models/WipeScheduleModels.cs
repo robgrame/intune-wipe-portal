@@ -47,14 +47,13 @@ public static class WipeWaveStatus
 public sealed class WipeScheduleWaveEntity : ITableEntity
 {
     public const string PartitionConstant = "WipeScheduleWave";
-    public const string ActionTypeConstant = "wipe";
 
     public string PartitionKey { get; set; } = PartitionConstant;
     public string RowKey { get; set; } = string.Empty;
     public DateTimeOffset? Timestamp { get; set; }
     public ETag ETag { get; set; }
 
-    public string ActionType { get; set; } = ActionTypeConstant;
+    public string ActionType { get; set; } = "wipe";
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public DateTimeOffset ScheduledAtUtc { get; set; }
@@ -110,6 +109,7 @@ public sealed class WipeScheduleWaveView
     public Guid WaveId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? Description { get; init; }
+    public string ActionType { get; init; } = "wipe";
     public DateTimeOffset ScheduledAtUtc { get; init; }
     public string Status { get; init; } = WipeWaveStatus.Draft;
     public string? CreatedBy { get; init; }
@@ -136,6 +136,7 @@ public sealed class WipeScheduleWaveView
             WaveId         = e.WaveId,
             Name           = e.Name,
             Description    = e.Description,
+            ActionType     = e.ActionType,
             ScheduledAtUtc = e.ScheduledAtUtc,
             Status         = e.Status,
             CreatedBy      = e.CreatedBy,

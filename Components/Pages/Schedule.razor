@@ -28,9 +28,18 @@
             <EditForm Model="_draft" OnValidSubmit="SubmitCreate">
                 <DataAnnotationsValidator />
                 <div class="row g-2">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Name</label>
                         <InputText class="form-control" @bind-Value="_draft.Name" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Capability</label>
+                        <InputSelect class="form-select" @bind-Value="_draft.ActionType">
+                            <option value="wipe">wipe</option>
+                            <option value="bitlocker">bitlocker</option>
+                            <option value="autopilot">autopilot</option>
+                            <option value="rename">rename</option>
+                        </InputSelect>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Scheduled (UTC)</label>
@@ -47,7 +56,7 @@
                             }
                         </InputSelect>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label">Description</label>
                         <InputText class="form-control" @bind-Value="_draft.Description" />
                     </div>
@@ -83,6 +92,7 @@ else
         <thead>
             <tr>
                 <th>Name</th>
+                <th>Capability</th>
                 <th>Scheduled (UTC)</th>
                 <th>Status</th>
                 <th class="text-center">Devices</th>
@@ -101,6 +111,7 @@ else
                             <div class="small text-muted">@w.Description</div>
                         }
                     </td>
+                    <td><span class="badge bg-dark">@w.ActionType</span></td>
                     <td>@w.ScheduledAtUtc.UtcDateTime.ToString("u")</td>
                     <td>
                         <span class="badge bg-@StatusColor(w.Status)">@w.Status</span>
@@ -190,7 +201,7 @@ else
             var scheduledUtc = new DateTimeOffset(
                 DateTime.SpecifyKind(_draft.ScheduledAtLocal, DateTimeKind.Utc));
             await Svc.CreateWaveAsync(_draft.Name, scheduledUtc, _draft.Status,
-                _draft.Description, who);
+                _draft.Description, who, _draft.ActionType);
             _creating = false;
             await ReloadAsync();
         }
@@ -227,6 +238,7 @@ else
     private sealed class WaveDraft
     {
         public string Name { get; set; } = string.Empty;
+        public string ActionType { get; set; } = "wipe";
         public DateTime ScheduledAtLocal { get; set; } = DateTime.UtcNow.AddHours(1);
         public string Status { get; set; } = WipeWaveStatus.Scheduled;
         public string? Description { get; set; }

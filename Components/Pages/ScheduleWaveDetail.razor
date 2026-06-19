@@ -23,6 +23,7 @@ else
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 m-0">
             @_wave.Name
+            <span class="badge bg-dark ms-2">@_wave.ActionType</span>
             <span class="badge bg-@StatusColor(_wave.Status) ms-2">@_wave.Status</span>
             @if (_wave.IsGroupBased)
             {
@@ -55,9 +56,18 @@ else
             <div class="card-body">
                 <EditForm Model="_edit" OnValidSubmit="SubmitEdit">
                     <div class="row g-2">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label">Name</label>
                             <InputText class="form-control" @bind-Value="_edit.Name" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Capability</label>
+                            <InputSelect class="form-select" @bind-Value="_edit.ActionType">
+                                <option value="wipe">wipe</option>
+                                <option value="bitlocker">bitlocker</option>
+                                <option value="autopilot">autopilot</option>
+                                <option value="rename">rename</option>
+                            </InputSelect>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Scheduled (UTC)</label>
@@ -74,50 +84,9 @@ else
                                 }
                             </InputSelect>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label">Description</label>
                             <InputText class="form-control" @bind-Value="_edit.Description" />
-                        </div>
-                    </div>
-                    <div class="row g-2 mt-2">
-                        <div class="col-md-6 position-relative">
-                            <label class="form-label">
-                                <i class="bi bi-people-fill me-1"></i>Entra group (membership)
-                                <span class="text-muted small">- optional, in alternativa ai device individuali</span>
-                            </label>
-                            <input class="form-control" value="@_edit.EntraGroupDisplay"
-                                   @oninput="OnGroupSearchInput"
-                                   @onfocusout="OnGroupSearchFocusOut"
-                                   placeholder="Cerca un gruppo Entra..." autocomplete="off" />
-                            @if (_groupSearchResults.Count > 0 && _showGroupDropdown)
-                            {
-                                <div class="list-group position-absolute w-100 shadow" style="z-index:1050; max-height:200px; overflow-y:auto;">
-                                    @foreach (var g in _groupSearchResults)
-                                    {
-                                        <button type="button" class="list-group-item list-group-item-action py-1"
-                                                @onmousedown="() => SelectGroup(g)" @onmousedown:preventDefault>
-                                            <strong>@g.DisplayName</strong>
-                                            @if (!string.IsNullOrEmpty(g.Description))
-                                            {
-                                                <span class="text-muted small ms-2">@g.Description</span>
-                                            }
-                                            <br /><code class="small text-secondary">@g.GroupId</code>
-                                        </button>
-                                    }
-                                </div>
-                            }
-                            @if (!string.IsNullOrEmpty(_edit.EntraGroupId))
-                            {
-                                <div class="mt-1">
-                                    <span class="badge bg-info">
-                                        <i class="bi bi-people-fill"></i> @_edit.EntraGroupDisplay
-                                    </span>
-                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2"
-                                            @onclick="ClearGroup">
-                                        <i class="bi bi-x-circle"></i> Rimuovi
-                                    </button>
-                                </div>
-                            }
                         </div>
                     </div>
                     <div class="mt-3 d-flex gap-2">
@@ -173,6 +142,12 @@ else
                             Bulk import (CSV)
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_addTab == AddTab.Group ? "active" : "")"
+                           href="#" @onclick="() => SwitchTab(AddTab.Group)" @onclick:preventDefault>
+                            <i class="bi bi-people-fill"></i> Entra group
+                        </a>
+                    </li>
                 </ul>
             </div>
             <div class="card-body">
@@ -215,7 +190,7 @@ else
                         </div>
                     </EditForm>
                 }
-                else
+                else if (_addTab == AddTab.Bulk)
                 {
                     <p class="text-muted small mb-2">
                         Paste a CSV/TSV (one device per line). Supported columns:
@@ -325,6 +300,52 @@ else
                         </div>
                     }
                 }
+                else if (_addTab == AddTab.Group)
+                {
+                    <p class="text-muted small mb-2">
+                        Associa un gruppo Entra ID a questa wave. Tutti i device membri del gruppo saranno automaticamente
+                        inclusi nella wave (in alternativa o aggiunta ai device individuali).
+                    </p>
+
+                    @if (!string.IsNullOrEmpty(_wave.EntraGroupId))
+                    {
+                        <div class="alert alert-info py-2">
+                            <i class="bi bi-people-fill"></i>
+                            Gruppo attuale: <strong>@(_wave.EntraGroupName ?? _wave.EntraGroupId)</strong>
+                            <code class="ms-2 small">@_wave.EntraGroupId</code>
+                            <button type="button" class="btn btn-sm btn-outline-danger ms-3" @onclick="RemoveWaveGroup" disabled="@_busy">
+                                <i class="bi bi-x-circle"></i> Rimuovi
+                            </button>
+                        </div>
+                    }
+
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-8 position-relative">
+                            <label class="form-label">Cerca gruppo Entra</label>
+                            <input class="form-control" value="@_groupSearchText"
+                                   @oninput="OnGroupSearchInput"
+                                   @onfocusout="OnGroupSearchFocusOut"
+                                   placeholder="Digita almeno 2 caratteri..." autocomplete="off" />
+                            @if (_groupSearchResults.Count > 0 && _showGroupDropdown)
+                            {
+                                <div class="list-group position-absolute w-100 shadow" style="z-index:1050; max-height:200px; overflow-y:auto;">
+                                    @foreach (var g in _groupSearchResults)
+                                    {
+                                        <button type="button" class="list-group-item list-group-item-action py-1"
+                                                @onmousedown="() => SelectGroup(g)" @onmousedown:preventDefault>
+                                            <strong>@g.DisplayName</strong>
+                                            @if (!string.IsNullOrEmpty(g.Description))
+                                            {
+                                                <span class="text-muted small ms-2">@g.Description</span>
+                                            }
+                                            <br /><code class="small text-secondary">@g.GroupId</code>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -428,7 +449,7 @@ else
     private CancellationTokenSource? _searchCts;
 
     // Bulk import state
-    private enum AddTab { Single, Bulk }
+    private enum AddTab { Single, Bulk, Group }
     private AddTab _addTab = AddTab.Single;
     private string _bulkText = string.Empty;
     private BulkImportResult? _bulkPreview;
@@ -494,10 +515,9 @@ else
         {
             Name             = _wave.Name,
             Description      = _wave.Description,
+            ActionType       = _wave.ActionType,
             ScheduledAtLocal = _wave.ScheduledAtUtc.UtcDateTime,
             Status           = _wave.Status,
-            EntraGroupId     = _wave.EntraGroupId,
-            EntraGroupDisplay = _wave.EntraGroupName,
         };
         _editing = true;
         _error = null;
@@ -513,7 +533,7 @@ else
             var scheduledUtc = new DateTimeOffset(
                 DateTime.SpecifyKind(_edit.ScheduledAtLocal, DateTimeKind.Utc));
             await Svc.UpdateWaveAsync(WaveId, _edit.Name, scheduledUtc, _edit.Status, _edit.Description,
-                _edit.EntraGroupId, _edit.EntraGroupDisplay);
+                _edit.ActionType);
             _editing = false;
             await ReloadAsync();
         }
@@ -758,10 +778,9 @@ else
     {
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string ActionType { get; set; } = "wipe";
         public DateTime ScheduledAtLocal { get; set; }
         public string Status { get; set; } = WipeWaveStatus.Scheduled;
-        public string? EntraGroupId { get; set; }
-        public string? EntraGroupDisplay { get; set; }
     }
 
     private sealed class MemberDraft
@@ -774,6 +793,7 @@ else
 
     // ---- Entra group typeahead ------------------------------------------
 
+    private string _groupSearchText = "";
     private List<GroupLookupResult> _groupSearchResults = new();
     private bool _showGroupDropdown;
     private CancellationTokenSource? _groupSearchCts;
@@ -781,7 +801,7 @@ else
     private async Task OnGroupSearchInput(ChangeEventArgs e)
     {
         var value = e.Value?.ToString() ?? string.Empty;
-        _edit.EntraGroupDisplay = value;
+        _groupSearchText = value;
 
         _groupSearchCts?.Cancel();
         _groupSearchCts = new CancellationTokenSource();
@@ -804,25 +824,58 @@ else
             {
                 _groupSearchResults = results.ToList();
                 _showGroupDropdown = _groupSearchResults.Count > 0;
+                StateHasChanged();
             }
         }
         catch (TaskCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.LogWarning(ex, "Group search failed for '{Value}'", value);
+            _groupSearchResults.Clear();
+            _showGroupDropdown = false;
+        }
     }
 
-    private void SelectGroup(GroupLookupResult group)
+    private async Task SelectGroup(GroupLookupResult group)
     {
-        _edit.EntraGroupId = group.GroupId;
-        _edit.EntraGroupDisplay = group.DisplayName;
+        _groupSearchText = group.DisplayName;
         _groupSearchResults.Clear();
         _showGroupDropdown = false;
+
+        // Persist group association immediately
+        _busy = true; _error = null;
+        try
+        {
+            await Svc.UpdateWaveAsync(WaveId, _wave!.Name,
+                _wave.ScheduledAtUtc, _wave.Status, _wave.Description,
+                _wave.ActionType, group.GroupId, group.DisplayName);
+            await ReloadAsync();
+            _groupSearchText = "";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to set group on wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
     }
 
-    private void ClearGroup()
+    private async Task RemoveWaveGroup()
     {
-        _edit.EntraGroupId = null;
-        _edit.EntraGroupDisplay = null;
-        _groupSearchResults.Clear();
-        _showGroupDropdown = false;
+        _busy = true; _error = null;
+        try
+        {
+            await Svc.UpdateWaveAsync(WaveId, _wave!.Name,
+                _wave.ScheduledAtUtc, _wave.Status, _wave.Description,
+                _wave.ActionType, null, null);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Failed to remove group from wave {WaveId}.", WaveId);
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
     }
 
     private void OnGroupSearchFocusOut()
