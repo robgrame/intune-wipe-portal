@@ -63,6 +63,9 @@ param ledgerContainerName string = 'action-ledger'
 @description('Endpoint of the Azure App Configuration store used by the API. The portal uses this to manage operational settings. Leave empty to disable the Configuration page.')
 param appConfigEndpoint string = ''
 
+@description('Name of the storage account hosting the wipe schedule tables (wipeschedulewaves, wipeschedulemembers). Usually the Web role storage account.')
+param wipeScheduleStorageAccount string = ''
+
 // ---------------------------------------------------------------------------
 var suffix       = nameSuffix
 var sep          = empty(suffix) ? '' : '-'
@@ -184,6 +187,7 @@ resource web 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Cruscotto__LedgerStorageAccount', value: ledgerAcctResolved }
         { name: 'Cruscotto__LedgerContainer',      value: ledgerContainerName }
         { name: 'AppConfig__Endpoint',             value: appConfigEndpoint }
+        { name: 'WipeSchedule__StorageAccountName', value: wipeScheduleStorageAccount }
       ]
     }
   }

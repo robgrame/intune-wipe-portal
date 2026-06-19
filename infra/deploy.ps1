@@ -197,6 +197,13 @@ if ($appcfgEndpoint) {
     $deployParams += "appConfigEndpoint=$($appcfgEndpoint.Trim())"
     Write-Host "    App Config: $($appcfgEndpoint.Trim())"
 }
+# Auto-detect wipe schedule storage account (Web role storage, contains 'stw').
+$wipeStAccount = (az storage account list -g $ResourceGroup -o json --only-show-errors 2>$null | ConvertFrom-Json) |
+    Where-Object { $_.name -like "${NamePrefix}stw*" } | Select-Object -First 1 -ExpandProperty name
+if ($wipeStAccount) {
+    $deployParams += "wipeScheduleStorageAccount=$wipeStAccount"
+    Write-Host "    Wipe Schedule SA: $wipeStAccount"
+}
 
 $deployment = az deployment group create `
     --resource-group $ResourceGroup `
