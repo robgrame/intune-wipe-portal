@@ -9,9 +9,38 @@ main {
     margin: 0 auto;
 }
 
-.portal-footer {
+.modern-footer {
     background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 1.5rem 0 1rem;
+    text-align: center;
+    font-size: 0.85rem;
     color: #6c757d;
+}
+
+.modern-footer .footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modern-footer .footer-links {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+.modern-footer .footer-links a {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.modern-footer .footer-links a:hover {
+    color: #0078d4;
+    text-decoration: underline;
 }
 
 #blazor-error-ui {

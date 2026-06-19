@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@using System.Reflection
 
 <NavMenu />
 
@@ -8,19 +9,30 @@
     </article>
 </main>
 
-<footer class="portal-footer text-center text-muted small py-3 border-top mt-auto">
-    <span class="me-3">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 96 96" class="me-1" style="vertical-align: -2px;">
-            <path fill="#0078D4" d="M0 33.3L44.6 28l.1 43.6-44.6.3zm44.6 42.5l.1 43.6L0 114.6V76zm5-47.5L95.9 22v46.7l-46.3.4zm46.3 47l.1 46.4-46.3-6.5-.1-40z"/>
-        </svg>
-        Running on Azure
-    </span>
-    <span class="me-3">
-        Made with <span class="text-danger">&#10084;</span> for IT Admins
-    </span>
-    <span>
-        Build @(typeof(Program).Assembly.GetName().Version?.ToString() ?? "dev")
-    </span>
+<footer class="modern-footer">
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="">Dashboard</a>
+                <a href="schedule">Schedule</a>
+                <a href="configuration">Configurazione</a>
+                <a href="about">About</a>
+            </div>
+            <p class="mb-1">
+                &copy; @DateTime.Now.Year - Intune Device Actions -
+                <small class="text-muted">
+                    <i class="bi bi-code-slash me-1"></i>
+                    <span title="Application version">v@(GetVersion())</span>
+                </small>
+            </p>
+            <span class="d-flex align-items-center gap-3 flex-wrap justify-content-center mb-2">
+                <span title="Hosted on Microsoft Azure">
+                    <img src="images/Azure-A.svg" alt="Azure" style="height:14px;width:auto;vertical-align:middle;" class="me-1" />Running on Azure
+                </span>
+                <span><i class="bi bi-heart-fill me-1 text-danger"></i>Made with passion for IT Admins</span>
+            </span>
+        </div>
+    </div>
 </footer>
 
 <div id="blazor-error-ui" data-nosnippet>
@@ -28,3 +40,12 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private static string GetVersion()
+    {
+        var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+        var infoAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+        return infoAttr?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "dev";
+    }
+}

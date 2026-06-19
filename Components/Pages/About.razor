@@ -82,10 +82,12 @@
     </div>
 
     <div class="text-muted small">
-        <p>
-            <strong>Versione:</strong>
-            @(typeof(Program).Assembly.GetName().Version?.ToString() ?? "dev")
-        </p>
+        @{
+            var asm = System.Reflection.Assembly.GetEntryAssembly();
+            var attrs = asm?.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
+            var ver = attrs?.Length > 0 ? ((System.Reflection.AssemblyInformationalVersionAttribute)attrs[0]).InformationalVersion : "dev";
+        }
+        <p><strong>Versione:</strong> @ver</p>
         <p>
             <strong>Runtime:</strong> @System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
         </p>
