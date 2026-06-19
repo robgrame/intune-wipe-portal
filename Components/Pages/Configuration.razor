@@ -559,7 +559,7 @@ else
     {
         _certError = null;
         var maxSize = 50 * 1024; // 50 KB max per cert file
-        foreach (var file in e.GetMultipleFiles(20))
+        foreach (var file in e.GetMultipleFiles(100))
         {
             try
             {
