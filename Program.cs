@@ -81,6 +81,7 @@ builder.Services.AddSingleton<EventGridMetricsCollector>();
 builder.Services.AddSingleton<AuditQueryService>();
 builder.Services.AddSingleton<CruscottoTelemetryService>();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<AppConfigManagementService>();
 builder.Services.AddSingleton<CapabilityRegistry>();
 builder.Services.AddSingleton<WipeScheduleService>();
 builder.Services.AddHostedService<CruscottoRealtimeBroadcaster>();

@@ -1,0 +1,252 @@
+@page "/configuration"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanScheduleWrite")]
+@rendermode InteractiveServer
+@inject IntuneWipePortal.Services.AppConfigManagementService AppConfig
+@inject ILogger<Configuration> Logger
+
+<PageTitle>Configurazione</PageTitle>
+
+<h1 class="mb-3">Configurazione App</h1>
+<p class="text-muted">
+    Modifica le impostazioni operative. Le modifiche vengono applicate entro 30 secondi (hot-reload).
+</p>
+
+@if (_loading)
+{
+    <p><em>Caricamento configurazione…</em></p>
+}
+else
+{
+    <form @onsubmit="SaveAsync">
+        <!-- Certificati -->
+        <fieldset class="mb-4">
+            <legend>🔐 Certificati CA</legend>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Subject Root CA</label>
+                <input type="text" class="form-control" @bind="_trustedCaSubjects"
+                       placeholder="CN=Root CA, O=Corp|CN=Issuing CA, O=Corp" />
+                <div class="form-text">Distinguished Name delle Root CA e Subordinate CA, separati da <code>|</code></div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Thumbprint CA (SHA1)</label>
+                <input type="text" class="form-control" @bind="_trustedCaThumbprints"
+                       placeholder="AABBCCDD...,11223344..." />
+                <div class="form-text">Thumbprint SHA1 (hex) separati da virgola</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Certificato Root CA (Base64 DER)</label>
+                <textarea class="form-control font-monospace" rows="4" @bind="_trustedRootCerts"
+                          placeholder="MIIBxTCCAW..."></textarea>
+                <div class="form-text">Base64 DER del certificato Root CA. Più certificati separati da virgola.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Certificato Subordinate CA (Base64 DER)</label>
+                <textarea class="form-control font-monospace" rows="4" @bind="_trustedIntermediateCerts"
+                          placeholder="MIICpTCCAY..."></textarea>
+                <div class="form-text">Base64 DER della Subordinate/Issuing CA. Più certificati separati da virgola.</div>
+            </div>
+
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="chkCrl" @bind="_checkRevocation" />
+                <label class="form-check-label" for="chkCrl">Verifica CRL/OCSP</label>
+            </div>
+
+            @if (_checkRevocation)
+            {
+                <div class="mb-3">
+                    <label class="form-label">Modalità revoca</label>
+                    <select class="form-select" @bind="_revocationMode">
+                        <option value="Online">Online (scarica CRL/OCSP)</option>
+                        <option value="Offline">Offline (cache locale)</option>
+                        <option value="NoCheck">NoCheck (disabilitato)</option>
+                    </select>
+                </div>
+            }
+        </fieldset>
+
+        <!-- General -->
+        <fieldset class="mb-4">
+            <legend>⚙️ Impostazioni generali</legend>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Action Types abilitati</label>
+                <input type="text" class="form-control" @bind="_allowedTypes" placeholder="wipe,autopilot,bitlocker,rename" />
+                <div class="form-text">Lista CSV dei tipi di azione accettati dall'API</div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Max azioni/device/giorno</label>
+                    <input type="number" class="form-control" @bind="_maxActionsPerDay" min="1" max="100" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Grazia rearm (ore)</label>
+                    <input type="number" class="form-control" @bind="_rearmGraceHours" min="1" max="720" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Anti-replay skew (sec)</label>
+                    <input type="number" class="form-control" @bind="_maxTimestampSkew" min="30" max="3600" />
+                </div>
+            </div>
+
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="chkRearm" @bind="_allowForceRearm" />
+                <label class="form-check-label" for="chkRearm">Consenti rearm manuale ledger</label>
+            </div>
+        </fieldset>
+
+        <!-- Security groups -->
+        <fieldset class="mb-4">
+            <legend>👥 Gruppi autorizzati</legend>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-bold">Gruppo Wipe (Object ID)</label>
+                    <input type="text" class="form-control" @bind="_wipeGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-bold">Gruppo BitLocker (Object ID)</label>
+                    <input type="text" class="form-control" @bind="_bitlockerGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
+                </div>
+            </div>
+        </fieldset>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Salva configurazione
+            </button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="LoadAsync">Annulla</button>
+        </div>
+
+        @if (_saved)
+        {
+            <div class="alert alert-success mt-3" role="alert">
+                ✅ Configurazione salvata. Le modifiche saranno attive entro 30 secondi.
+            </div>
+        }
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger mt-3" role="alert">
+                ❌ Errore: @_error
+            </div>
+        }
+    </form>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private bool _saved;
+    private string? _error;
+
+    // Certificati
+    private string _trustedCaSubjects = "";
+    private string _trustedCaThumbprints = "";
+    private string _trustedRootCerts = "";
+    private string _trustedIntermediateCerts = "";
+    private bool _checkRevocation;
+    private string _revocationMode = "Online";
+
+    // General
+    private string _allowedTypes = "wipe";
+    private int _maxActionsPerDay = 5;
+    private int _rearmGraceHours = 48;
+    private int _maxTimestampSkew = 300;
+    private bool _allowForceRearm = true;
+
+    // Groups
+    private string _wipeGroupId = "";
+    private string _bitlockerGroupId = "";
+
+    private static readonly string[] Keys = [
+        "ClientCert:TrustedCaSubjects",
+        "ClientCert:TrustedCaThumbprints",
+        "ClientCert:TrustedRootCertificates",
+        "ClientCert:TrustedIntermediateCertificates",
+        "ClientCert:CheckRevocation",
+        "ClientCert:RevocationMode",
+        "Actions:AllowedTypes",
+        "Idempotency:MaxActionsPerDevicePerDay",
+        "Idempotency:RearmGracePeriodHours",
+        "Idempotency:AllowForceRearm",
+        "Replay:MaxTimestampSkewSeconds",
+        "Wipe:AllowedGroupId",
+        "BitLocker:AllowedGroupId",
+    ];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _saved = false;
+        _error = null;
+        try
+        {
+            var values = await AppConfig.GetManyAsync(Keys);
+
+            _trustedCaSubjects = values.GetValueOrDefault("ClientCert:TrustedCaSubjects") ?? "";
+            _trustedCaThumbprints = values.GetValueOrDefault("ClientCert:TrustedCaThumbprints") ?? "";
+            _trustedRootCerts = values.GetValueOrDefault("ClientCert:TrustedRootCertificates") ?? "";
+            _trustedIntermediateCerts = values.GetValueOrDefault("ClientCert:TrustedIntermediateCertificates") ?? "";
+            _checkRevocation = bool.TryParse(values.GetValueOrDefault("ClientCert:CheckRevocation"), out var cr) && cr;
+            _revocationMode = values.GetValueOrDefault("ClientCert:RevocationMode") ?? "Online";
+
+            _allowedTypes = values.GetValueOrDefault("Actions:AllowedTypes") ?? "wipe";
+            _maxActionsPerDay = int.TryParse(values.GetValueOrDefault("Idempotency:MaxActionsPerDevicePerDay"), out var m) ? m : 5;
+            _rearmGraceHours = int.TryParse(values.GetValueOrDefault("Idempotency:RearmGracePeriodHours"), out var rh) ? rh : 48;
+            _allowForceRearm = !bool.TryParse(values.GetValueOrDefault("Idempotency:AllowForceRearm"), out var fr) || fr;
+            _maxTimestampSkew = int.TryParse(values.GetValueOrDefault("Replay:MaxTimestampSkewSeconds"), out var ts) ? ts : 300;
+
+            _wipeGroupId = values.GetValueOrDefault("Wipe:AllowedGroupId") ?? "";
+            _bitlockerGroupId = values.GetValueOrDefault("BitLocker:AllowedGroupId") ?? "";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "Failed to load configuration from App Config");
+        }
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saved = false;
+        _error = null;
+        try
+        {
+            var settings = new Dictionary<string, string>
+            {
+                ["ClientCert:TrustedCaSubjects"] = _trustedCaSubjects,
+                ["ClientCert:TrustedCaThumbprints"] = _trustedCaThumbprints,
+                ["ClientCert:TrustedRootCertificates"] = _trustedRootCerts,
+                ["ClientCert:TrustedIntermediateCertificates"] = _trustedIntermediateCerts,
+                ["ClientCert:CheckRevocation"] = _checkRevocation.ToString().ToLower(),
+                ["ClientCert:RevocationMode"] = _revocationMode,
+                ["Actions:AllowedTypes"] = _allowedTypes,
+                ["Idempotency:MaxActionsPerDevicePerDay"] = _maxActionsPerDay.ToString(),
+                ["Idempotency:RearmGracePeriodHours"] = _rearmGraceHours.ToString(),
+                ["Idempotency:AllowForceRearm"] = _allowForceRearm.ToString().ToLower(),
+                ["Replay:MaxTimestampSkewSeconds"] = _maxTimestampSkew.ToString(),
+                ["Wipe:AllowedGroupId"] = _wipeGroupId,
+                ["BitLocker:AllowedGroupId"] = _bitlockerGroupId,
+            };
+            await AppConfig.SetManyAsync(settings);
+            _saved = true;
+            Logger.LogInformation("Configuration saved by operator");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "Failed to save configuration");
+        }
+        _saving = true;
+        _saving = false;
+    }
+}
