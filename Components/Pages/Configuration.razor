@@ -192,6 +192,31 @@ else
                     </label>
                 </div>
             </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="txtUserGroupId" class="form-label">
+                        Allowed User Group ID
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Object ID del gruppo Entra che contiene gli utenti abilitati ad eseguire il wipe. Lasciare vuoto per non applicare gating utente."></i>
+                    </label>
+                    <input type="text" class="form-control font-monospace" id="txtUserGroupId"
+                           placeholder="(opzionale) Object ID gruppo utenti" @bind="_wipeAllowedUserGroupId" />
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="selGatingMode" class="form-label">
+                        Gating Mode
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="DeviceOnly: solo il gruppo device. UserOnly: solo il gruppo utente. Both: entrambi devono passare. Either: almeno uno deve passare."></i>
+                    </label>
+                    <select class="form-select" id="selGatingMode" @bind="_wipeGatingMode">
+                        <option value="DeviceOnly">DeviceOnly</option>
+                        <option value="UserOnly">UserOnly</option>
+                        <option value="Both">Both</option>
+                        <option value="Either">Either</option>
+                    </select>
+                </div>
+            </div>
         </fieldset>
 
         <!-- BitLocker -->
@@ -339,6 +364,8 @@ else
     // Wipe
     private bool _keepEnrollmentData;
     private bool _keepUserData;
+    private string _wipeAllowedUserGroupId = "";
+    private string _wipeGatingMode = "DeviceOnly";
 
     // Capability gate groups
     private List<CapabilityGateRow> _capabilityGates = new();
@@ -365,6 +392,8 @@ else
         "Replay:MaxTimestampSkewSeconds",
         "Wipe:AllowedGroupId",
         "Wipe:AllowedGroupName",
+        "Wipe:AllowedUserGroupId",
+        "Wipe:GatingMode",
         "Wipe:KeepEnrollmentData",
         "Wipe:KeepUserData",
         "BitLocker:AllowedGroupId",
@@ -419,6 +448,8 @@ else
             }).ToList();
             _keepEnrollmentData = bool.TryParse(values.GetValueOrDefault("Wipe:KeepEnrollmentData"), out var ke) && ke;
             _keepUserData = bool.TryParse(values.GetValueOrDefault("Wipe:KeepUserData"), out var ku) && ku;
+            _wipeAllowedUserGroupId = values.GetValueOrDefault("Wipe:AllowedUserGroupId") ?? "";
+            _wipeGatingMode = values.GetValueOrDefault("Wipe:GatingMode") ?? "DeviceOnly";
 
             _pollMaxAgeHours = int.TryParse(values.GetValueOrDefault("ActionStatus:PollMaxAgeHours"), out var pa) ? pa : 24;
             _pollerCron = values.GetValueOrDefault("ActionStatusPoller:CronExpression") ?? "*/5 * * * * *";
@@ -461,6 +492,8 @@ else
                 ["Wipe:AllowedGroupName"] = _capabilityGates.FirstOrDefault(g => g.Capability == "wipe")?.GroupName ?? "",
                 ["Wipe:KeepEnrollmentData"] = _keepEnrollmentData.ToString().ToLower(),
                 ["Wipe:KeepUserData"] = _keepUserData.ToString().ToLower(),
+                ["Wipe:AllowedUserGroupId"] = _wipeAllowedUserGroupId,
+                ["Wipe:GatingMode"] = _wipeGatingMode,
                 ["BitLocker:AllowedGroupId"] = _capabilityGates.FirstOrDefault(g => g.Capability == "bitlocker")?.GroupId ?? "",
                 ["BitLocker:AllowedGroupName"] = _capabilityGates.FirstOrDefault(g => g.Capability == "bitlocker")?.GroupName ?? "",
                 ["Autopilot:AllowedGroupId"] = _capabilityGates.FirstOrDefault(g => g.Capability == "autopilot")?.GroupId ?? "",
