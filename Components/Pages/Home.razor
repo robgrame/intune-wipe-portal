@@ -3,6 +3,7 @@
 @inject AuditQueryService Audit
 @inject CruscottoTelemetryService Cruscotto
 @inject CapabilityRegistry CapRegistry
+@inject IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>Action dashboard</PageTitle>
@@ -94,23 +95,45 @@ else
 }
 else
 {
+    @* ── Charts row ── *@
     <div class="row g-3 mb-4">
-        @KpiCard("Richieste totali", _kpis.TotalRequests, "primary")
-        @KpiCard("Accettate", _kpis.Accepted, "success")
-        @KpiCardClickable("Negate", _kpis.Denied, "warning", () => _showDeniedPanel = !_showDeniedPanel)
-        @KpiCard("Inviate", _kpis.TotalIssued, "info")
-        @KpiCard("Completate", _kpis.ActionCompleted, "success")
-        @KpiCardClickable("Fallite", _kpis.ActionFailed, "danger", () => _showFailedPanel = !_showFailedPanel)
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-muted text-uppercase small">Esito richieste (24h)</h6>
+                    <div style="height:200px; position:relative;">
+                        <canvas id="chartOutcome"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-muted text-uppercase small">Pipeline (24h)</h6>
+                    <div style="height:200px; position:relative;">
+                        <canvas id="chartPipeline"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="row g-3 mb-4">
-        @KpiCard("Errori transient", _kpis.TotalTransientErrors, "secondary")
-        @KpiCard("Fail permanenti", _kpis.TotalPermanentFailures, "danger")
-        @KpiCard("Poll timeout", _kpis.ActionPollTimeout, "warning")
+    @* ── Compact KPI cards ── *@
+    <div class="row g-2 mb-4">
+        @KpiCardCompact("Totali", _kpis.TotalRequests, "primary")
+        @KpiCardCompact("Accettate", _kpis.Accepted, "success")
+        @KpiCardCompactClickable("Negate", _kpis.Denied, "warning", () => _showDeniedPanel = !_showDeniedPanel)
+        @KpiCardCompact("Inviate", _kpis.TotalIssued, "info")
+        @KpiCardCompact("Completate", _kpis.ActionCompleted, "success")
+        @KpiCardCompactClickable("Fallite", _kpis.ActionFailed, "danger", () => _showFailedPanel = !_showFailedPanel)
+        @KpiCardCompact("Transient err", _kpis.TotalTransientErrors, "secondary")
+        @KpiCardCompact("Perm. fail", _kpis.TotalPermanentFailures, "danger")
+        @KpiCardCompact("Poll timeout", _kpis.ActionPollTimeout, "warning")
         @if (_latency is not null && _latency.SampleCount > 0)
         {
-            @KpiCardText("Latenza media", $"{_latency.AvgMinutes:F1} min", "info")
-            @KpiCardText("Latenza P95", $"{_latency.P95Minutes:F1} min", "info")
+            @KpiCardCompactText("Lat. media", $"{_latency.AvgMinutes:F1}m", "info")
+            @KpiCardCompactText("Lat. P95", $"{_latency.P95Minutes:F1}m", "info")
         }
     </div>
 
@@ -511,19 +534,28 @@ else
     private bool _resetAllInProgress;
     private string? _resetError;
     private System.Threading.Timer? _timer;
+    private bool _chartsRendered;
 
     protected override async Task OnInitializedAsync()
     {
         _tabs = await CapRegistry.GetCapabilitiesAsync(default);
-        // Pin the local _capability reference to the All instance returned by
-        // the registry so reference-equality comparisons in the tab loop work.
         _capability = _tabs.FirstOrDefault(c => c.IsAll) ?? CapabilityDescriptor.All;
         await LoadAsync();
         _timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(LoadAsync);
             await InvokeAsync(StateHasChanged);
+            await InvokeAsync(RenderChartsAsync);
         }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_kpis is not null && !_chartsRendered)
+        {
+            _chartsRendered = true;
+            await RenderChartsAsync();
+        }
     }
 
     private async Task SetCapabilityAsync(CapabilityDescriptor cap)
@@ -532,6 +564,7 @@ else
         _capability = cap;
         _kpis = null; _denies = null; _recent = null; _inFlight = null; _failedDetails = null;
         await LoadAsync();
+        await RenderChartsAsync();
     }
 
     private async Task LoadAsync()
@@ -634,37 +667,73 @@ else
         return new HealthSummary(overall, label, issues);
     }
 
-    private static RenderFragment KpiCard(string title, long value, string color) => builder =>
+    private static RenderFragment KpiCardCompact(string title, long value, string color) => builder =>
     {
         builder.AddMarkupContent(0, $@"
-            <div class='col-md-2 col-6'>
-                <div class='card text-bg-{color} h-100'>
-                    <div class='card-body'>
-                        <div class='small text-uppercase'>{title}</div>
-                        <div class='display-6'>{value}</div>
+            <div class='col-lg-2 col-md-3 col-4'>
+                <div class='card border-start border-4 border-{color} h-100 shadow-sm'>
+                    <div class='card-body py-2 px-3'>
+                        <div class='text-muted small text-uppercase' style='font-size:.7rem;'>{title}</div>
+                        <div class='fw-bold fs-5'>{value}</div>
                     </div>
                 </div>
             </div>");
     };
 
-    private RenderFragment KpiCardClickable(string title, long value, string color, Action onClick) => builder =>
+    private RenderFragment KpiCardCompactClickable(string title, long value, string color, Action onClick) => builder =>
     {
         builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", "col-md-2 col-6");
+        builder.AddAttribute(1, "class", "col-lg-2 col-md-3 col-4");
         builder.AddAttribute(2, "style", "cursor:pointer;");
-        builder.AddAttribute(3, "title", "Clicca per vedere i dettagli");
+        builder.AddAttribute(3, "title", "Clicca per dettagli");
         builder.AddAttribute(4, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, onClick));
 
         builder.AddMarkupContent(5, $@"
-            <div class='card text-bg-{color} h-100' style='border:2px dashed rgba(0,0,0,0.2);'>
-                <div class='card-body'>
-                    <div class='small text-uppercase'>{title} 🔍</div>
-                    <div class='display-6'>{value}</div>
+            <div class='card border-start border-4 border-{color} h-100 shadow-sm' style='border-style:dashed !important;'>
+                <div class='card-body py-2 px-3'>
+                    <div class='text-muted small text-uppercase' style='font-size:.7rem;'>{title} 🔍</div>
+                    <div class='fw-bold fs-5'>{value}</div>
                 </div>
             </div>");
 
         builder.CloseElement();
     };
+
+    private static RenderFragment KpiCardCompactText(string title, string text, string color) => builder =>
+    {
+        builder.AddMarkupContent(0, $@"
+            <div class='col-lg-2 col-md-3 col-4'>
+                <div class='card border-start border-4 border-{color} h-100 shadow-sm'>
+                    <div class='card-body py-2 px-3'>
+                        <div class='text-muted small text-uppercase' style='font-size:.7rem;'>{title}</div>
+                        <div class='fw-bold fs-5'>{text}</div>
+                    </div>
+                </div>
+            </div>");
+    };
+
+    private async Task RenderChartsAsync()
+    {
+        if (_kpis is null) return;
+        try
+        {
+            // Doughnut: outcome breakdown
+            var outcomeLabels = new[] { "Accettate", "Negate", "Fallite" };
+            var outcomeData = new[] { _kpis.Accepted, _kpis.Denied, _kpis.ActionFailed };
+            var outcomeColors = new[] { "#198754", "#ffc107", "#dc3545" };
+            await JS.InvokeVoidAsync("dashboardCharts.renderDoughnut",
+                "chartOutcome", outcomeLabels, outcomeData, outcomeColors);
+
+            // Bar: pipeline funnel
+            var pipeLabels = new[] { "Totali", "Accettate", "Inviate", "Completate", "Fallite", "Timeout" };
+            var pipeData = new[] { _kpis.TotalRequests, _kpis.Accepted, _kpis.TotalIssued,
+                _kpis.ActionCompleted, _kpis.ActionFailed, _kpis.ActionPollTimeout };
+            var pipeColors = new[] { "#0d6efd", "#198754", "#0dcaf0", "#198754", "#dc3545", "#ffc107" };
+            await JS.InvokeVoidAsync("dashboardCharts.renderBar",
+                "chartPipeline", pipeLabels, pipeData, pipeColors);
+        }
+        catch { /* JS interop may fail during disconnect */ }
+    }
 
     private static string FriendlyDenyReason(string eventName) => eventName switch
     {
@@ -690,19 +759,6 @@ else
         var e when e.Contains(".error") => "Errore",
         var e when e.Contains(".failed") => "Fallita",
         _ => eventName
-    };
-
-    private static RenderFragment KpiCardText(string title, string text, string color) => builder =>
-    {
-        builder.AddMarkupContent(0, $@"
-            <div class='col-md-2 col-6'>
-                <div class='card text-bg-{color} h-100'>
-                    <div class='card-body'>
-                        <div class='small text-uppercase'>{title}</div>
-                        <div class='h4 mb-0'>{text}</div>
-                    </div>
-                </div>
-            </div>");
     };
 
     private static IReadOnlyList<RecentEventDisplayRow> BuildRecentDisplayRows(IReadOnlyList<AuditEventRow> recentRaw, int take)
