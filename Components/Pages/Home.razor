@@ -1,5 +1,5 @@
 @page "/"
-@rendermode InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject AuditQueryService Audit
 @inject CruscottoTelemetryService Cruscotto
 @inject CapabilityRegistry CapRegistry

@@ -1,6 +1,6 @@
 @page "/configuration"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanScheduleWrite")]
-@rendermode InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject IntuneWipePortal.Services.AppConfigManagementService AppConfig
 @inject DeviceLookupService DeviceLookup
 @inject ILogger<Configuration> Logger

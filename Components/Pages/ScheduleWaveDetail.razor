@@ -1,5 +1,5 @@
 @page "/schedule/{WaveId:guid}"
-@rendermode InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Policy = "CanScheduleWrite")]
 @inject WipeScheduleService Svc
 @inject DeviceLookupService DeviceLookup
@@ -131,22 +131,22 @@ else
             <div class="card-header">
                 <ul class="nav nav-tabs card-header-tabs">
                     <li class="nav-item">
-                        <a class="nav-link @(_addTab == AddTab.Single ? "active" : "")"
-                           href="#" @onclick="() => SwitchTab(AddTab.Single)" @onclick:preventDefault>
+                        <button type="button" class="nav-link @(_addTab == AddTab.Single ? "active" : "")"
+                           @onclick="() => SwitchTab(AddTab.Single)">
                             Add one device
-                        </a>
+                        </button>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link @(_addTab == AddTab.Bulk ? "active" : "")"
-                           href="#" @onclick="() => SwitchTab(AddTab.Bulk)" @onclick:preventDefault>
+                        <button type="button" class="nav-link @(_addTab == AddTab.Bulk ? "active" : "")"
+                           @onclick="() => SwitchTab(AddTab.Bulk)">
                             Bulk import (CSV)
-                        </a>
+                        </button>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link @(_addTab == AddTab.Group ? "active" : "")"
-                           href="#" @onclick="() => SwitchTab(AddTab.Group)" @onclick:preventDefault>
+                        <button type="button" class="nav-link @(_addTab == AddTab.Group ? "active" : "")"
+                           @onclick="() => SwitchTab(AddTab.Group)">
                             <i class="bi bi-people-fill"></i> Entra group
-                        </a>
+                        </button>
                     </li>
                 </ul>
             </div>

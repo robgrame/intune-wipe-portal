@@ -1,5 +1,5 @@
 @page "/schedule"
-@rendermode InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Policy = "CanScheduleWrite")]
 @inject WipeScheduleService Svc
 @inject NavigationManager Nav
