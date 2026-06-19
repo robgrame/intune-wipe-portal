@@ -63,6 +63,15 @@ public sealed class WipeScheduleWaveEntity : ITableEntity
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
 
+    /// <summary>
+    /// Optional Entra group object id. When set, membership is determined by
+    /// group membership instead of individual device rows.
+    /// </summary>
+    public string? EntraGroupId { get; set; }
+
+    /// <summary>Display name of the Entra group (denormalized for UI).</summary>
+    public string? EntraGroupName { get; set; }
+
     public Guid WaveId =>
         Guid.TryParse(RowKey, out var g) ? g : Guid.Empty;
 }
@@ -110,6 +119,13 @@ public sealed class WipeScheduleWaveView
     public IReadOnlyList<WipeScheduleMemberView> Members { get; init; }
         = Array.Empty<WipeScheduleMemberView>();
 
+    /// <summary>Entra group id (when membership is group-based).</summary>
+    public string? EntraGroupId { get; init; }
+    /// <summary>Denormalized group name for display.</summary>
+    public string? EntraGroupName { get; init; }
+    /// <summary>True when wave uses group-based membership.</summary>
+    public bool IsGroupBased => !string.IsNullOrEmpty(EntraGroupId);
+
     public bool IsMutable => WipeWaveStatus.Mutable.Contains(Status);
     public bool HasFired  => ScheduledAtUtc <= DateTimeOffset.UtcNow;
 
@@ -127,6 +143,8 @@ public sealed class WipeScheduleWaveView
             UpdatedAtUtc   = e.UpdatedAtUtc,
             MemberCount    = memberCount,
             Members        = members ?? Array.Empty<WipeScheduleMemberView>(),
+            EntraGroupId   = e.EntraGroupId,
+            EntraGroupName = e.EntraGroupName,
         };
 }
 

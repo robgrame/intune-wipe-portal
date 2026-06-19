@@ -106,6 +106,46 @@ public sealed class DeviceLookupService
 
     private static string EscapeOData(string value) =>
         value.Replace("'", "''");
+
+    /// <summary>
+    /// Searches Entra groups whose displayName starts with <paramref name="prefix"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<GroupLookupResult>> SearchGroupsAsync(
+        string prefix, int top = 10, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(prefix) || prefix.Length < 2)
+            return [];
+
+        try
+        {
+            var resp = await _graph.Groups.GetAsync(cfg =>
+            {
+                cfg.QueryParameters.Filter = $"startsWith(displayName, '{EscapeOData(prefix)}')";
+                cfg.QueryParameters.Select = new[] { "id", "displayName", "description", "membershipRule" };
+                cfg.QueryParameters.Top = top;
+                cfg.QueryParameters.Orderby = new[] { "displayName" };
+                cfg.Headers.Add("ConsistencyLevel", "eventual");
+                cfg.QueryParameters.Count = true;
+            }, ct).ConfigureAwait(false);
+
+            if (resp?.Value is null) return [];
+
+            return resp.Value
+                .Select(g => new GroupLookupResult
+                {
+                    GroupId = g.Id ?? string.Empty,
+                    DisplayName = g.DisplayName ?? string.Empty,
+                    Description = g.Description,
+                    MembershipRule = g.MembershipRule,
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Group lookup failed for prefix '{Prefix}'.", prefix);
+            return [];
+        }
+    }
 }
 
 public sealed class DeviceLookupResult
@@ -119,4 +159,13 @@ public sealed class DeviceLookupResult
     public string? IntuneDeviceId { get; set; }
     public string? OperatingSystem { get; init; }
     public string? OsVersion { get; init; }
+}
+
+public sealed class GroupLookupResult
+{
+    /// <summary>Entra group object id.</summary>
+    public string GroupId { get; init; } = string.Empty;
+    public string DisplayName { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string? MembershipRule { get; init; }
 }

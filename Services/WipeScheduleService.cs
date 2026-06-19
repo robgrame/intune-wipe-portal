@@ -166,6 +166,7 @@ public sealed class WipeScheduleService
     /// </summary>
     public async Task<Guid> CreateWaveAsync(string name, DateTimeOffset scheduledAtUtc,
         string status, string? description, string? createdBy,
+        string? entraGroupId = null, string? entraGroupName = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -190,11 +191,13 @@ public sealed class WipeScheduleService
             CreatedBy      = createdBy,
             CreatedAtUtc   = DateTimeOffset.UtcNow,
             UpdatedAtUtc   = DateTimeOffset.UtcNow,
+            EntraGroupId   = string.IsNullOrWhiteSpace(entraGroupId) ? null : entraGroupId!.Trim(),
+            EntraGroupName = string.IsNullOrWhiteSpace(entraGroupName) ? null : entraGroupName!.Trim(),
         };
         await _waves.AddEntityAsync(entity, ct).ConfigureAwait(false);
         _log.LogInformation(
-            "Schedule wave created — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status} createdBy={CreatedBy}",
-            id, entity.Name, entity.ScheduledAtUtc, entity.Status, createdBy ?? "<anonymous>");
+            "Schedule wave created — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status} createdBy={CreatedBy} entraGroupId={EntraGroupId}",
+            id, entity.Name, entity.ScheduledAtUtc, entity.Status, createdBy ?? "<anonymous>", entity.EntraGroupId ?? "<none>");
         return id;
     }
 
@@ -209,7 +212,9 @@ public sealed class WipeScheduleService
     /// <see cref="WipeWaveStatus.ClientVisible"/> excludes Completed).
     /// </summary>
     public async Task UpdateWaveAsync(Guid waveId, string name, DateTimeOffset scheduledAtUtc,
-        string status, string? description, CancellationToken ct = default)
+        string status, string? description,
+        string? entraGroupId = null, string? entraGroupName = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Wave name is required.", nameof(name));
@@ -224,9 +229,6 @@ public sealed class WipeScheduleService
             .ConfigureAwait(false);
         var w = resp.Value;
 
-        // Block downgrading a runner/scheduler-owned status back to operator
-        // state — e.g. flipping an executing wave back to draft would be
-        // surprising and is almost certainly an operator mistake.
         if (string.Equals(w.Status, WipeWaveStatus.Executing, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(status, WipeWaveStatus.Canceled, StringComparison.OrdinalIgnoreCase))
         {
@@ -242,12 +244,14 @@ public sealed class WipeScheduleService
         w.Description    = string.IsNullOrWhiteSpace(description) ? null : description!.Trim();
         w.ScheduledAtUtc = scheduledAtUtc.ToUniversalTime();
         w.Status         = status.ToLowerInvariant();
+        w.EntraGroupId   = string.IsNullOrWhiteSpace(entraGroupId) ? null : entraGroupId!.Trim();
+        w.EntraGroupName = string.IsNullOrWhiteSpace(entraGroupName) ? null : entraGroupName!.Trim();
         w.UpdatedAtUtc   = DateTimeOffset.UtcNow;
         await _waves.UpdateEntityAsync(w, w.ETag, TableUpdateMode.Replace, ct)
             .ConfigureAwait(false);
         _log.LogInformation(
-            "Schedule wave updated — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status}",
-            waveId, w.Name, w.ScheduledAtUtc, w.Status);
+            "Schedule wave updated — waveId={WaveId} name={Name} scheduledAtUtc={ScheduledAtUtc:O} status={Status} entraGroupId={EntraGroupId}",
+            waveId, w.Name, w.ScheduledAtUtc, w.Status, w.EntraGroupId ?? "<none>");
     }
 
     public async Task DeleteWaveAsync(Guid waveId, CancellationToken ct = default)
