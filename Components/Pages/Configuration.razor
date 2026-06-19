@@ -9,6 +9,8 @@
 <h1 class="mb-3">Configurazione App</h1>
 <p class="text-muted">
     Modifica le impostazioni operative. Le modifiche vengono applicate entro 30 secondi (hot-reload).
+    <i class="bi bi-info-circle text-primary" role="img" aria-label="info"
+       title="Le impostazioni vengono scritte su Azure App Configuration. Un Sentinel bump notifica tutti i Function App entro 30 secondi senza restart."></i>
 </p>
 
 @if (_loading)
@@ -23,42 +25,62 @@ else
             <legend>🔐 Certificati CA</legend>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Subject Root CA</label>
+                <label class="form-label fw-bold">
+                    Subject Root CA
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Distinguished Name (Subject) delle Root CA e Subordinate CA fidate. Usato per verificare che la chain del certificato client sia stata emessa da una CA autorizzata. Separare più DN con il carattere pipe (|) perché il DN stesso contiene virgole."></i>
+                </label>
                 <input type="text" class="form-control" @bind="_trustedCaSubjects"
                        placeholder="CN=Root CA, O=Corp|CN=Issuing CA, O=Corp" />
-                <div class="form-text">Distinguished Name delle Root CA e Subordinate CA, separati da <code>|</code></div>
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Thumbprint CA (SHA1)</label>
+                <label class="form-label fw-bold">
+                    Thumbprint CA (SHA1)
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Thumbprint SHA1 (hex, 40 caratteri) delle CA fidate. Almeno uno deve essere presente nella chain del certificato client. Usato come controllo aggiuntivo rispetto al Subject per prevenire CA con stesso DN ma chiave diversa."></i>
+                </label>
                 <input type="text" class="form-control" @bind="_trustedCaThumbprints"
                        placeholder="AABBCCDD...,11223344..." />
-                <div class="form-text">Thumbprint SHA1 (hex) separati da virgola</div>
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Certificato Root CA (Base64 DER)</label>
+                <label class="form-label fw-bold">
+                    Certificato Root CA (Base64 DER)
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Certificato della Root CA in formato Base64 (senza header/footer PEM). Usato come trust anchor per costruire la chain X.509 completa. Più certificati separati da virgola."></i>
+                </label>
                 <textarea class="form-control font-monospace" rows="4" @bind="_trustedRootCerts"
                           placeholder="MIIBxTCCAW..."></textarea>
-                <div class="form-text">Base64 DER del certificato Root CA. Più certificati separati da virgola.</div>
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Certificato Subordinate CA (Base64 DER)</label>
+                <label class="form-label fw-bold">
+                    Certificato Subordinate CA (Base64 DER)
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Certificato della Subordinate/Issuing CA in formato Base64. Usato come path hint per completare la chain quando il client non invia i certificati intermedi. Più certificati separati da virgola."></i>
+                </label>
                 <textarea class="form-control font-monospace" rows="4" @bind="_trustedIntermediateCerts"
                           placeholder="MIICpTCCAY..."></textarea>
-                <div class="form-text">Base64 DER della Subordinate/Issuing CA. Più certificati separati da virgola.</div>
             </div>
 
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch" id="chkCrl" @bind="_checkRevocation" />
-                <label class="form-check-label" for="chkCrl">Verifica CRL/OCSP</label>
+                <label class="form-check-label" for="chkCrl">
+                    Verifica CRL/OCSP
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Abilita la verifica dello stato di revoca dei certificati client. Quando attivo, il sistema controlla la CRL (Certificate Revocation List) o OCSP per accertarsi che il certificato non sia stato revocato."></i>
+                </label>
             </div>
 
             @if (_checkRevocation)
             {
                 <div class="mb-3">
-                    <label class="form-label">Modalità revoca</label>
+                    <label class="form-label">
+                        Modalità revoca
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Online: scarica CRL/OCSP in tempo reale (richiede connettività). Offline: usa solo CRL già in cache locale. NoCheck: disabilita completamente la verifica (non consigliato in produzione)."></i>
+                    </label>
                     <select class="form-select" @bind="_revocationMode">
                         <option value="Online">Online (scarica CRL/OCSP)</option>
                         <option value="Offline">Offline (cache locale)</option>
@@ -73,34 +95,57 @@ else
             <legend>⚙️ Impostazioni generali</legend>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Action Types abilitati</label>
+                <label class="form-label fw-bold">
+                    Action Types abilitati
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Lista CSV dei tipi di azione che l'API accetta. Le richieste con actionType non in lista vengono rifiutate con 400 Bad Request. Valori supportati: wipe, autopilot, bitlocker, rename."></i>
+                </label>
                 <input type="text" class="form-control" @bind="_allowedTypes" placeholder="wipe,autopilot,bitlocker,rename" />
-                <div class="form-text">Lista CSV dei tipi di azione accettati dall'API</div>
             </div>
 
             <div class="row">
                 <div class="col-md-4 mb-3">
-                    <label class="form-label fw-bold">Max azioni/device/giorno</label>
+                    <label class="form-label fw-bold">
+                        Max azioni/device/giorno
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Numero massimo di azioni consentite per lo stesso device in 24 ore. Protegge da loop accidentali o abuso. Superato il limite, le richieste vengono rifiutate finché non scade la finestra."></i>
+                    </label>
                     <input type="number" class="form-control" @bind="_maxActionsPerDay" min="1" max="100" />
                 </div>
                 <div class="col-md-4 mb-3">
-                    <label class="form-label fw-bold">Grazia rearm (ore)</label>
+                    <label class="form-label fw-bold">
+                        Grazia rearm (ore)
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Ore dopo le quali un ledger entry bloccato diventa eleggibile per rearm automatico. Se un device ha raggiunto il limite giornaliero e questa finestra è trascorsa, il contatore viene resettato."></i>
+                    </label>
                     <input type="number" class="form-control" @bind="_rearmGraceHours" min="1" max="720" />
                 </div>
                 <div class="col-md-4 mb-3">
-                    <label class="form-label fw-bold">Anti-replay skew (sec)</label>
+                    <label class="form-label fw-bold">
+                        Anti-replay skew (sec)
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Finestra temporale massima (in secondi) entro cui il timestamp della richiesta client è considerato valido. Protegge da attacchi replay: richieste con timestamp più vecchio di N secondi vengono rifiutate con 401."></i>
+                    </label>
                     <input type="number" class="form-control" @bind="_maxTimestampSkew" min="30" max="3600" />
                 </div>
             </div>
 
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch" id="chkRearm" @bind="_allowForceRearm" />
-                <label class="form-check-label" for="chkRearm">Consenti rearm manuale ledger</label>
+                <label class="form-check-label" for="chkRearm">
+                    Consenti rearm manuale ledger
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Se attivo, gli operatori possono forzare il reset del contatore idempotency per un device specifico dal portale (Dashboard > Reset Ledger). Utile per sbloccare device in situazioni eccezionali."></i>
+                </label>
             </div>
 
             <div class="mb-3 form-check form-switch">
                 <input class="form-check-input" type="checkbox" role="switch" id="chkAdminApi" @bind="_adminApiEnabled" />
-                <label class="form-check-label" for="chkAdminApi">API Admin Ledger abilitata</label>
+                <label class="form-check-label" for="chkAdminApi">
+                    API Admin Ledger abilitata
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Abilita gli endpoint HTTP admin per la gestione del ledger idempotency (GET/RESET). Quando disabilitato, gli endpoint ritornano 404 anche per utenti autenticati."></i>
+                </label>
             </div>
         </fieldset>
 
@@ -109,18 +154,30 @@ else
             <legend>🗑️ Wipe</legend>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Gruppo Wipe (Object ID)</label>
+                <label class="form-label fw-bold">
+                    Gruppo Wipe (Object ID)
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Object ID del gruppo Entra ID. Solo i device che appartengono a questo gruppo possono essere sottoposti a wipe. Lasciare vuoto per disabilitare il gate (qualsiasi device accettato)."></i>
+                </label>
                 <input type="text" class="form-control" @bind="_wipeGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
             </div>
 
             <div class="row">
                 <div class="col-md-6 mb-3 form-check form-switch ms-2">
                     <input class="form-check-input" type="checkbox" role="switch" id="chkKeepEnroll" @bind="_keepEnrollmentData" />
-                    <label class="form-check-label" for="chkKeepEnroll">Mantieni dati enrollment</label>
+                    <label class="form-check-label" for="chkKeepEnroll">
+                        Mantieni dati enrollment
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Se attivo, il wipe preserva i dati di enrollment Intune sul device. Il device rimane registrato in Intune dopo il wipe e può ri-enrollarsi automaticamente al prossimo avvio senza intervento manuale."></i>
+                    </label>
                 </div>
                 <div class="col-md-6 mb-3 form-check form-switch ms-2">
                     <input class="form-check-input" type="checkbox" role="switch" id="chkKeepUser" @bind="_keepUserData" />
-                    <label class="form-check-label" for="chkKeepUser">Mantieni dati utente</label>
+                    <label class="form-check-label" for="chkKeepUser">
+                        Mantieni dati utente
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Se attivo, il wipe preserva la cartella del profilo utente (C:\\Users\\<user>) sul device. I dati personali e le configurazioni dell'utente non vengono eliminati."></i>
+                    </label>
                 </div>
             </div>
         </fieldset>
@@ -130,7 +187,11 @@ else
             <legend>🔑 BitLocker</legend>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Gruppo BitLocker (Object ID)</label>
+                <label class="form-label fw-bold">
+                    Gruppo BitLocker (Object ID)
+                    <i class="bi bi-info-circle text-muted ms-1" role="img"
+                       title="Object ID del gruppo Entra ID. Solo i device appartenenti a questo gruppo possono ricevere la rotazione della chiave BitLocker. Lasciare vuoto per disabilitare il gate."></i>
+                </label>
                 <input type="text" class="form-control" @bind="_bitlockerGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
             </div>
         </fieldset>
@@ -141,17 +202,28 @@ else
 
             <div class="row">
                 <div class="col-md-4 mb-3">
-                    <label class="form-label fw-bold">Finestra poller stato (ore)</label>
+                    <label class="form-label fw-bold">
+                        Finestra poller stato (ore)
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Il poller verifica su Microsoft Graph lo stato delle azioni inviate. Questa impostazione definisce quante ore indietro il poller considera le azioni 'attive'. Azioni più vecchie vengono ignorate."></i>
+                    </label>
                     <input type="number" class="form-control" @bind="_pollMaxAgeHours" min="1" max="168" />
                 </div>
                 <div class="col-md-4 mb-3">
-                    <label class="form-label fw-bold">Frequenza poller (CRON)</label>
+                    <label class="form-label fw-bold">
+                        Frequenza poller (CRON)
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Espressione CRON a 6 campi (sec min ore giorno mese dow) che definisce la frequenza con cui il poller interroga Graph per lo stato delle azioni. Default: ogni 5 secondi. Richiede restart dell'app."></i>
+                    </label>
                     <input type="text" class="form-control" @bind="_pollerCron" placeholder="*/5 * * * * *" />
-                    <div class="form-text">6 campi (sec min ore giorno mese dow)</div>
                 </div>
                 <div class="col-md-4 mb-3 form-check form-switch mt-4 ms-2">
                     <input class="form-check-input" type="checkbox" role="switch" id="chkEg" @bind="_eventGridEnabled" />
-                    <label class="form-check-label" for="chkEg">Event Grid audit stream</label>
+                    <label class="form-check-label" for="chkEg">
+                        Event Grid audit stream
+                        <i class="bi bi-info-circle text-muted ms-1" role="img"
+                           title="Quando attivo, gli eventi di audit (azione inviata, completata, fallita) vengono pubblicati anche su Azure Event Grid. Il portale li usa per gli aggiornamenti real-time del cruscotto via SignalR."></i>
+                    </label>
                 </div>
             </div>
         </fieldset>
