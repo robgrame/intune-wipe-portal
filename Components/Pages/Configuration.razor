@@ -97,20 +97,61 @@ else
                 <input class="form-check-input" type="checkbox" role="switch" id="chkRearm" @bind="_allowForceRearm" />
                 <label class="form-check-label" for="chkRearm">Consenti rearm manuale ledger</label>
             </div>
+
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="chkAdminApi" @bind="_adminApiEnabled" />
+                <label class="form-check-label" for="chkAdminApi">API Admin Ledger abilitata</label>
+            </div>
         </fieldset>
 
-        <!-- Security groups -->
+        <!-- Wipe -->
         <fieldset class="mb-4">
-            <legend>👥 Gruppi autorizzati</legend>
+            <legend>🗑️ Wipe</legend>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Gruppo Wipe (Object ID)</label>
+                <input type="text" class="form-control" @bind="_wipeGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
+            </div>
 
             <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label fw-bold">Gruppo Wipe (Object ID)</label>
-                    <input type="text" class="form-control" @bind="_wipeGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
+                <div class="col-md-6 mb-3 form-check form-switch ms-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="chkKeepEnroll" @bind="_keepEnrollmentData" />
+                    <label class="form-check-label" for="chkKeepEnroll">Mantieni dati enrollment</label>
                 </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label fw-bold">Gruppo BitLocker (Object ID)</label>
-                    <input type="text" class="form-control" @bind="_bitlockerGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
+                <div class="col-md-6 mb-3 form-check form-switch ms-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="chkKeepUser" @bind="_keepUserData" />
+                    <label class="form-check-label" for="chkKeepUser">Mantieni dati utente</label>
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- BitLocker -->
+        <fieldset class="mb-4">
+            <legend>🔑 BitLocker</legend>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Gruppo BitLocker (Object ID)</label>
+                <input type="text" class="form-control" @bind="_bitlockerGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
+            </div>
+        </fieldset>
+
+        <!-- Monitoring -->
+        <fieldset class="mb-4">
+            <legend>📊 Monitoring</legend>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Finestra poller stato (ore)</label>
+                    <input type="number" class="form-control" @bind="_pollMaxAgeHours" min="1" max="168" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Frequenza poller (CRON)</label>
+                    <input type="text" class="form-control" @bind="_pollerCron" placeholder="*/5 * * * * *" />
+                    <div class="form-text">6 campi (sec min ore giorno mese dow)</div>
+                </div>
+                <div class="col-md-4 mb-3 form-check form-switch mt-4 ms-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="chkEg" @bind="_eventGridEnabled" />
+                    <label class="form-check-label" for="chkEg">Event Grid audit stream</label>
                 </div>
             </div>
         </fieldset>
@@ -158,10 +199,20 @@ else
     private int _rearmGraceHours = 48;
     private int _maxTimestampSkew = 300;
     private bool _allowForceRearm = true;
+    private bool _adminApiEnabled = true;
+
+    // Wipe
+    private bool _keepEnrollmentData;
+    private bool _keepUserData;
 
     // Groups
     private string _wipeGroupId = "";
     private string _bitlockerGroupId = "";
+
+    // Monitoring
+    private int _pollMaxAgeHours = 24;
+    private string _pollerCron = "*/5 * * * * *";
+    private bool _eventGridEnabled = true;
 
     private static readonly string[] Keys = [
         "ClientCert:TrustedCaSubjects",
@@ -174,9 +225,15 @@ else
         "Idempotency:MaxActionsPerDevicePerDay",
         "Idempotency:RearmGracePeriodHours",
         "Idempotency:AllowForceRearm",
+        "Idempotency:AdminApiEnabled",
         "Replay:MaxTimestampSkewSeconds",
         "Wipe:AllowedGroupId",
+        "Wipe:KeepEnrollmentData",
+        "Wipe:KeepUserData",
         "BitLocker:AllowedGroupId",
+        "ActionStatus:PollMaxAgeHours",
+        "ActionStatusPoller:CronExpression",
+        "EventGrid:Enabled",
     ];
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -201,10 +258,17 @@ else
             _maxActionsPerDay = int.TryParse(values.GetValueOrDefault("Idempotency:MaxActionsPerDevicePerDay"), out var m) ? m : 5;
             _rearmGraceHours = int.TryParse(values.GetValueOrDefault("Idempotency:RearmGracePeriodHours"), out var rh) ? rh : 48;
             _allowForceRearm = !bool.TryParse(values.GetValueOrDefault("Idempotency:AllowForceRearm"), out var fr) || fr;
+            _adminApiEnabled = !bool.TryParse(values.GetValueOrDefault("Idempotency:AdminApiEnabled"), out var aa) || aa;
             _maxTimestampSkew = int.TryParse(values.GetValueOrDefault("Replay:MaxTimestampSkewSeconds"), out var ts) ? ts : 300;
 
             _wipeGroupId = values.GetValueOrDefault("Wipe:AllowedGroupId") ?? "";
+            _keepEnrollmentData = bool.TryParse(values.GetValueOrDefault("Wipe:KeepEnrollmentData"), out var ke) && ke;
+            _keepUserData = bool.TryParse(values.GetValueOrDefault("Wipe:KeepUserData"), out var ku) && ku;
             _bitlockerGroupId = values.GetValueOrDefault("BitLocker:AllowedGroupId") ?? "";
+
+            _pollMaxAgeHours = int.TryParse(values.GetValueOrDefault("ActionStatus:PollMaxAgeHours"), out var pa) ? pa : 24;
+            _pollerCron = values.GetValueOrDefault("ActionStatusPoller:CronExpression") ?? "*/5 * * * * *";
+            _eventGridEnabled = !bool.TryParse(values.GetValueOrDefault("EventGrid:Enabled"), out var eg) || eg;
         }
         catch (Exception ex)
         {
@@ -233,9 +297,15 @@ else
                 ["Idempotency:MaxActionsPerDevicePerDay"] = _maxActionsPerDay.ToString(),
                 ["Idempotency:RearmGracePeriodHours"] = _rearmGraceHours.ToString(),
                 ["Idempotency:AllowForceRearm"] = _allowForceRearm.ToString().ToLower(),
+                ["Idempotency:AdminApiEnabled"] = _adminApiEnabled.ToString().ToLower(),
                 ["Replay:MaxTimestampSkewSeconds"] = _maxTimestampSkew.ToString(),
                 ["Wipe:AllowedGroupId"] = _wipeGroupId,
+                ["Wipe:KeepEnrollmentData"] = _keepEnrollmentData.ToString().ToLower(),
+                ["Wipe:KeepUserData"] = _keepUserData.ToString().ToLower(),
                 ["BitLocker:AllowedGroupId"] = _bitlockerGroupId,
+                ["ActionStatus:PollMaxAgeHours"] = _pollMaxAgeHours.ToString(),
+                ["ActionStatusPoller:CronExpression"] = _pollerCron,
+                ["EventGrid:Enabled"] = _eventGridEnabled.ToString().ToLower(),
             };
             await AppConfig.SetManyAsync(settings);
             _saved = true;
