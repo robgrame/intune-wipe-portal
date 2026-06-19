@@ -16,9 +16,6 @@
                     <NavLink class="nav-link" href="" Match="NavLinkMatch.All">Dashboard</NavLink>
                 </li>
                 <li class="nav-item">
-                    <NavLink class="nav-link" href="audit">Audit events</NavLink>
-                </li>
-                <li class="nav-item">
                     <NavLink class="nav-link" href="cruscotto" data-enhance-nav="false">Cruscotto</NavLink>
                 </li>
                 <AuthorizeView Policy="CanScheduleWrite">
@@ -31,6 +28,9 @@
                         </li>
                     </Authorized>
                 </AuthorizeView>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="audit">Audit</NavLink>
+                </li>
                 <li class="nav-item">
                     <NavLink class="nav-link" href="about">About</NavLink>
                 </li>

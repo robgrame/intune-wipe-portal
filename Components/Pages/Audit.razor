@@ -1,56 +1,154 @@
 @page "/audit/{CorrelationId?}"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject AuditQueryService AuditSvc
+@inject CapabilityRegistry CapRegistry
 @inject NavigationManager Nav
+@inject ILogger<Audit> Log
 
 <PageTitle>Audit trail</PageTitle>
 
-<h1 class="mb-3">Audit trail</h1>
+<h1 class="mb-3"><i class="bi bi-journal-text"></i> Audit trail</h1>
 
-<form class="mb-3" @onsubmit="Search">
-    <div class="input-group">
-        <span class="input-group-text">Correlation ID</span>
-        <input class="form-control" @bind="_query" placeholder="8-64 chars (letters / digits / dash)" />
-        <button class="btn btn-primary" type="submit">Cerca</button>
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form class="row g-2 align-items-end" @onsubmit="Search">
+            <div class="col-md-8">
+                <label class="form-label small text-muted mb-0">Cerca per Correlation ID</label>
+                <input class="form-control" @bind="_query"
+                       placeholder="Inserisci un correlation ID per visualizzare il trail completo..." />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="bi bi-search"></i> Cerca
+                </button>
+            </div>
+            <div class="col-md-2">
+                @if (!string.IsNullOrWhiteSpace(CorrelationId))
+                {
+                    <button class="btn btn-outline-secondary w-100" type="button" @onclick="ClearSearch">
+                        <i class="bi bi-x-circle"></i> Pulisci
+                    </button>
+                }
+            </div>
+        </form>
     </div>
-</form>
+</div>
 
 @if (!string.IsNullOrWhiteSpace(CorrelationId))
 {
+    @* ── Trail per correlation ID specifico ── *@
     <h2 class="h5">Trail per <code>@CorrelationId</code></h2>
 
     @if (_loading) { <p><em>Loading...</em></p> }
     else if (_error is not null) { <div class="alert alert-danger">@_error</div> }
-    else if (_events is null || _events.Count == 0) { <p class="text-muted">Nessun evento trovato.</p> }
+    else if (_events is null || _events.Count == 0) { <p class="text-muted">Nessun evento trovato per questo correlation ID.</p> }
     else
     {
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Timestamp (UTC)</th>
-                    <th>Evento</th>
-                    <th>Capability</th>
-                    <th>Device</th>
-                    <th>Intune ID</th>
-                    <th>Entra ID</th>
-                    <th>Reason / Exception</th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var e in _events)
-            {
-                <tr>
-                    <td>@e.Timestamp.UtcDateTime.ToString("u")</td>
-                    <td><code>@e.EventName</code></td>
-                    <td>@(e.ActionType ?? "-")</td>
-                    <td>@(e.DeviceName ?? "-")</td>
-                    <td>@(e.IntuneDeviceId ?? "-")</td>
-                    <td>@(e.EntraDeviceId ?? "-")</td>
-                    <td>@(e.Reason ?? e.ExceptionType ?? "-")</td>
-                </tr>
-            }
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead class="table-light">
+                    <tr>
+                        <th>Timestamp (UTC)</th>
+                        <th>Evento</th>
+                        <th>Capability</th>
+                        <th>Device</th>
+                        <th>Intune ID</th>
+                        <th>Entra ID</th>
+                        <th>Reason / Exception</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var e in _events)
+                {
+                    <tr>
+                        <td class="text-nowrap">@e.Timestamp.UtcDateTime.ToString("u")</td>
+                        <td><code>@e.EventName</code></td>
+                        <td>@(e.ActionType ?? "-")</td>
+                        <td>@(e.DeviceName ?? "-")</td>
+                        <td><code class="small">@(e.IntuneDeviceId ?? "-")</code></td>
+                        <td><code class="small">@(e.EntraDeviceId ?? "-")</code></td>
+                        <td>@(e.Reason ?? e.ExceptionType ?? "-")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+else
+{
+    @* ── Vista recente (ultimi 72h) ── *@
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Ultimi eventi (72h)</h2>
+        <div class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm" style="width:auto;" @onchange="OnCapabilityChanged">
+                @if (_tabs is not null)
+                {
+                    @foreach (var cap in _tabs)
+                    {
+                        <option value="@(cap.ActionTypeValue ?? "__all__")" selected="@(cap.ActionTypeValue == _selectedCap.ActionTypeValue)">
+                            @cap.DisplayName
+                        </option>
+                    }
+                }
+            </select>
+            <span class="badge bg-secondary">@(_recentEvents?.Count ?? 0) eventi</span>
+        </div>
+    </div>
+
+    @if (_loadingRecent) { <p><em>Caricamento eventi recenti...</em></p> }
+    else if (_recentError is not null) { <div class="alert alert-danger">@_recentError</div> }
+    else if (_recentEvents is null || _recentEvents.Count == 0)
+    {
+        <p class="text-muted">Nessun evento nelle ultime 72 ore.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Timestamp (UTC)</th>
+                        <th>Evento</th>
+                        <th>Capability</th>
+                        <th>Device</th>
+                        <th>Reason</th>
+                        <th>Trail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var e in _recentEvents)
+                {
+                    var rowCss = e.EventName switch
+                    {
+                        var n when n.Contains("denied") => "table-warning",
+                        var n when n.Contains("failed") || n.Contains("error") => "table-danger",
+                        var n when n.Contains("completed") || n.Contains("accepted") => "",
+                        _ => ""
+                    };
+                    <tr class="@rowCss">
+                        <td class="text-nowrap">@e.Timestamp.UtcDateTime.ToString("u")</td>
+                        <td><code class="small">@e.EventName</code></td>
+                        <td>@(e.ActionType ?? "-")</td>
+                        <td>@(e.DeviceName ?? "-")</td>
+                        <td class="small">@(e.Reason ?? e.ExceptionType ?? "-")</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(e.CorrelationId))
+                            {
+                                <a href="@($"/audit/{e.CorrelationId}")" class="text-decoration-none" title="Visualizza trail completo">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (_recentEvents.Count >= 200)
+        {
+            <p class="text-muted small">Mostrati i primi 200 eventi. Usa la ricerca per correlation ID per approfondire.</p>
+        }
     }
 }
 
@@ -62,23 +160,84 @@
     private string? _error;
     private IReadOnlyList<AuditEventRow>? _events;
 
+    // Recent events state
+    private IReadOnlyList<CapabilityDescriptor>? _tabs;
+    private CapabilityDescriptor _selectedCap = CapabilityDescriptor.All;
+    private bool _loadingRecent;
+    private string? _recentError;
+    private IReadOnlyList<AuditEventRow>? _recentEvents;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tabs = await CapRegistry.GetCapabilitiesAsync(default);
+        _selectedCap = _tabs.FirstOrDefault(c => c.IsAll) ?? CapabilityDescriptor.All;
+    }
+
     protected override async Task OnParametersSetAsync()
     {
-        if (string.IsNullOrWhiteSpace(CorrelationId)) { _events = null; return; }
-        _query = CorrelationId;
+        if (!string.IsNullOrWhiteSpace(CorrelationId))
+        {
+            _query = CorrelationId;
+            await LoadTrailAsync();
+        }
+        else
+        {
+            _events = null;
+            await LoadRecentAsync();
+        }
+    }
+
+    private async Task LoadTrailAsync()
+    {
         _loading = true;
         _error = null;
         try
         {
-            _events = await AuditSvc.GetTrailAsync(CorrelationId, default);
+            _events = await AuditSvc.GetTrailAsync(CorrelationId!, default);
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Audit trail query failed for {CorrelationId}", CorrelationId);
+            _error = ex.Message;
+        }
         finally { _loading = false; }
+    }
+
+    private async Task LoadRecentAsync()
+    {
+        _loadingRecent = true;
+        _recentError = null;
+        try
+        {
+            _recentEvents = await AuditSvc.GetRecentEventsAsync(200, TimeSpan.FromHours(72), _selectedCap, default);
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Recent audit events query failed");
+            _recentError = ex.Message;
+        }
+        finally { _loadingRecent = false; }
+    }
+
+    private async Task OnCapabilityChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (_tabs is null) return;
+        _selectedCap = val == "__all__"
+            ? _tabs.FirstOrDefault(c => c.IsAll) ?? CapabilityDescriptor.All
+            : _tabs.FirstOrDefault(c => c.ActionTypeValue == val) ?? CapabilityDescriptor.All;
+        await LoadRecentAsync();
     }
 
     private void Search()
     {
         if (!string.IsNullOrWhiteSpace(_query))
             Nav.NavigateTo($"/audit/{_query.Trim()}");
+    }
+
+    private void ClearSearch()
+    {
+        _query = string.Empty;
+        Nav.NavigateTo("/audit");
     }
 }
