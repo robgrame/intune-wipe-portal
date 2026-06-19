@@ -9,6 +9,11 @@ main {
     margin: 0 auto;
 }
 
+.portal-footer {
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;

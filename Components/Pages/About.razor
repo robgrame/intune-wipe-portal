@@ -1,0 +1,93 @@
+@page "/about"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanRead")]
+
+<PageTitle>About</PageTitle>
+
+<div class="container py-4" style="max-width: 800px;">
+    <h1 class="h3 mb-4"><i class="bi bi-info-circle"></i> About</h1>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Intune Device Actions</h5>
+            <p class="card-text">
+                <strong>Intune Device Actions</strong> è una piattaforma enterprise per la gestione
+                automatizzata delle azioni sui dispositivi aziendali registrati in Microsoft Intune.
+            </p>
+            <p class="card-text">
+                La soluzione consente di eseguire in modo sicuro, tracciabile e schedulato operazioni come:
+            </p>
+            <ul>
+                <li><strong>Wipe</strong> — cancellazione remota del dispositivo</li>
+                <li><strong>BitLocker Key Rotation</strong> — rotazione delle chiavi di cifratura</li>
+                <li><strong>Autopilot Reset</strong> — re-registrazione del dispositivo in Windows Autopilot</li>
+                <li><strong>Device Rename</strong> — rinominazione del dispositivo in Intune</li>
+            </ul>
+            <p class="card-text">
+                Ogni azione è protetta da un sistema di idempotenza, audit trail completo,
+                e gating basato su gruppi Entra ID e wave di schedulazione.
+            </p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Il Portale</h5>
+            <p class="card-text">
+                Questo portale di osservabilità offre:
+            </p>
+            <ul>
+                <li><strong>Dashboard</strong> — metriche in tempo reale su code, errori e throughput</li>
+                <li><strong>Cruscotto</strong> — vista operativa live con SignalR e grafici temporali</li>
+                <li><strong>Audit Events</strong> — ricerca e consultazione degli eventi di audit</li>
+                <li><strong>Schedule</strong> — gestione delle wave di schedulazione con bulk import e associazione gruppi Entra</li>
+                <li><strong>Configurazione</strong> — gestione centralizzata di allowlist, CA trust chain, capability gating e wave</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Architettura</h5>
+            <p class="card-text">
+                La piattaforma è costruita su Azure con un'architettura event-driven e plug-in:
+            </p>
+            <div class="row text-center mt-3">
+                <div class="col-md-3 mb-2">
+                    <div class="border rounded p-2">
+                        <i class="bi bi-globe fs-4 text-primary"></i>
+                        <div class="small mt-1">API Gateway<br /><span class="text-muted">Azure Functions</span></div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="border rounded p-2">
+                        <i class="bi bi-arrow-left-right fs-4 text-info"></i>
+                        <div class="small mt-1">Dispatcher<br /><span class="text-muted">Service Bus</span></div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="border rounded p-2">
+                        <i class="bi bi-gear fs-4 text-success"></i>
+                        <div class="small mt-1">Capability Runners<br /><span class="text-muted">Isolated Functions</span></div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <div class="border rounded p-2">
+                        <i class="bi bi-shield-lock fs-4 text-warning"></i>
+                        <div class="small mt-1">Graph API<br /><span class="text-muted">Per-capability UAMI</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-muted small">
+        <p>
+            <strong>Versione:</strong>
+            @(typeof(Program).Assembly.GetName().Version?.ToString() ?? "dev")
+        </p>
+        <p>
+            <strong>Runtime:</strong> @System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
+        </p>
+    </div>
+</div>
