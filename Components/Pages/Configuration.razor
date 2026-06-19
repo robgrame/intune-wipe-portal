@@ -2,6 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanScheduleWrite")]
 @rendermode InteractiveServer
 @inject IntuneWipePortal.Services.AppConfigManagementService AppConfig
+@inject DeviceLookupService DeviceLookup
 @inject ILogger<Configuration> Logger
 
 <PageTitle>Configurazione</PageTitle>
@@ -153,15 +154,6 @@ else
         <fieldset class="mb-4">
             <legend>🗑️ Wipe</legend>
 
-            <div class="mb-3">
-                <label class="form-label fw-bold">
-                    Gruppo Wipe (Object ID)
-                    <i class="bi bi-info-circle text-muted ms-1" role="img"
-                       title="Object ID del gruppo Entra ID. Solo i device che appartengono a questo gruppo possono essere sottoposti a wipe. Lasciare vuoto per disabilitare il gate (qualsiasi device accettato)."></i>
-                </label>
-                <input type="text" class="form-control" @bind="_wipeGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
-            </div>
-
             <div class="row">
                 <div class="col-md-6 mb-3 form-check form-switch ms-2">
                     <input class="form-check-input" type="checkbox" role="switch" id="chkKeepEnroll" @bind="_keepEnrollmentData" />
@@ -185,15 +177,68 @@ else
         <!-- BitLocker -->
         <fieldset class="mb-4">
             <legend>🔑 BitLocker</legend>
+            <p class="text-muted small">Nessuna impostazione aggiuntiva specifica. Il gate di gruppo viene configurato nella sezione sottostante.</p>
+        </fieldset>
 
-            <div class="mb-3">
-                <label class="form-label fw-bold">
-                    Gruppo BitLocker (Object ID)
-                    <i class="bi bi-info-circle text-muted ms-1" role="img"
-                       title="Object ID del gruppo Entra ID. Solo i device appartenenti a questo gruppo possono ricevere la rotazione della chiave BitLocker. Lasciare vuoto per disabilitare il gate."></i>
-                </label>
-                <input type="text" class="form-control" @bind="_bitlockerGroupId" placeholder="00000000-0000-0000-0000-000000000000" />
-            </div>
+        <!-- Capability Gate Groups -->
+        <fieldset class="mb-4">
+            <legend>🛡️ Gate gruppi per capability</legend>
+            <p class="text-muted small">
+                Associa un gruppo Entra a ciascuna capability. Solo i device appartenenti al gruppo possono ricevere l'azione corrispondente.
+                Lasciare vuoto per disabilitare il gate (qualsiasi device accettato).
+            </p>
+
+            <table class="table table-bordered table-sm align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:140px">Capability</th>
+                        <th>Gruppo</th>
+                        <th style="width:320px">Group ID</th>
+                        <th style="width:60px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var gate in _capabilityGates)
+                    {
+                        <tr>
+                            <td><code>@gate.Capability</code></td>
+                            <td class="position-relative">
+                                <input class="form-control form-control-sm" value="@gate.GroupName"
+                                       @oninput="(e) => OnGateGroupSearch(gate, e)"
+                                       @onfocusout="() => OnGateGroupFocusOut(gate)"
+                                       placeholder="Cerca gruppo..." autocomplete="off" />
+                                @if (gate.ShowDropdown && gate.SearchResults.Count > 0)
+                                {
+                                    <div class="list-group position-absolute w-100 shadow" style="z-index:1050; max-height:180px; overflow-y:auto;">
+                                        @foreach (var g in gate.SearchResults)
+                                        {
+                                            <button type="button" class="list-group-item list-group-item-action py-1"
+                                                    @onmousedown="() => SelectGateGroup(gate, g)" @onmousedown:preventDefault>
+                                                <strong>@g.DisplayName</strong>
+                                                @if (!string.IsNullOrEmpty(g.Description))
+                                                {
+                                                    <span class="text-muted small ms-2">@g.Description</span>
+                                                }
+                                                <br /><code class="small text-secondary">@g.GroupId</code>
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </td>
+                            <td><code class="small text-secondary">@gate.GroupId</code></td>
+                            <td class="text-center">
+                                @if (!string.IsNullOrEmpty(gate.GroupId))
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ClearGateGroup(gate)"
+                                            title="Rimuovi associazione">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </fieldset>
 
         <!-- Monitoring -->
@@ -277,9 +322,10 @@ else
     private bool _keepEnrollmentData;
     private bool _keepUserData;
 
-    // Groups
-    private string _wipeGroupId = "";
-    private string _bitlockerGroupId = "";
+    // Capability gate groups
+    private List<CapabilityGateRow> _capabilityGates = new();
+
+    private static readonly string[] GatedCapabilities = ["wipe", "bitlocker", "autopilot", "rename"];
 
     // Monitoring
     private int _pollMaxAgeHours = 24;
@@ -300,9 +346,15 @@ else
         "Idempotency:AdminApiEnabled",
         "Replay:MaxTimestampSkewSeconds",
         "Wipe:AllowedGroupId",
+        "Wipe:AllowedGroupName",
         "Wipe:KeepEnrollmentData",
         "Wipe:KeepUserData",
         "BitLocker:AllowedGroupId",
+        "BitLocker:AllowedGroupName",
+        "Autopilot:AllowedGroupId",
+        "Autopilot:AllowedGroupName",
+        "Rename:AllowedGroupId",
+        "Rename:AllowedGroupName",
         "ActionStatus:PollMaxAgeHours",
         "ActionStatusPoller:CronExpression",
         "EventGrid:Enabled",
@@ -333,10 +385,18 @@ else
             _adminApiEnabled = !bool.TryParse(values.GetValueOrDefault("Idempotency:AdminApiEnabled"), out var aa) || aa;
             _maxTimestampSkew = int.TryParse(values.GetValueOrDefault("Replay:MaxTimestampSkewSeconds"), out var ts) ? ts : 300;
 
-            _wipeGroupId = values.GetValueOrDefault("Wipe:AllowedGroupId") ?? "";
+            _capabilityGates = GatedCapabilities.Select(cap =>
+            {
+                var keyPrefix = cap switch { "bitlocker" => "BitLocker", "autopilot" => "Autopilot", "rename" => "Rename", _ => "Wipe" };
+                return new CapabilityGateRow
+                {
+                    Capability = cap,
+                    GroupId = values.GetValueOrDefault($"{keyPrefix}:AllowedGroupId") ?? "",
+                    GroupName = values.GetValueOrDefault($"{keyPrefix}:AllowedGroupName") ?? "",
+                };
+            }).ToList();
             _keepEnrollmentData = bool.TryParse(values.GetValueOrDefault("Wipe:KeepEnrollmentData"), out var ke) && ke;
             _keepUserData = bool.TryParse(values.GetValueOrDefault("Wipe:KeepUserData"), out var ku) && ku;
-            _bitlockerGroupId = values.GetValueOrDefault("BitLocker:AllowedGroupId") ?? "";
 
             _pollMaxAgeHours = int.TryParse(values.GetValueOrDefault("ActionStatus:PollMaxAgeHours"), out var pa) ? pa : 24;
             _pollerCron = values.GetValueOrDefault("ActionStatusPoller:CronExpression") ?? "*/5 * * * * *";
@@ -371,10 +431,16 @@ else
                 ["Idempotency:AllowForceRearm"] = _allowForceRearm.ToString().ToLower(),
                 ["Idempotency:AdminApiEnabled"] = _adminApiEnabled.ToString().ToLower(),
                 ["Replay:MaxTimestampSkewSeconds"] = _maxTimestampSkew.ToString(),
-                ["Wipe:AllowedGroupId"] = _wipeGroupId,
+                ["Wipe:AllowedGroupId"] = _capabilityGates.FirstOrDefault(g => g.Capability == "wipe")?.GroupId ?? "",
+                ["Wipe:AllowedGroupName"] = _capabilityGates.FirstOrDefault(g => g.Capability == "wipe")?.GroupName ?? "",
                 ["Wipe:KeepEnrollmentData"] = _keepEnrollmentData.ToString().ToLower(),
                 ["Wipe:KeepUserData"] = _keepUserData.ToString().ToLower(),
-                ["BitLocker:AllowedGroupId"] = _bitlockerGroupId,
+                ["BitLocker:AllowedGroupId"] = _capabilityGates.FirstOrDefault(g => g.Capability == "bitlocker")?.GroupId ?? "",
+                ["BitLocker:AllowedGroupName"] = _capabilityGates.FirstOrDefault(g => g.Capability == "bitlocker")?.GroupName ?? "",
+                ["Autopilot:AllowedGroupId"] = _capabilityGates.FirstOrDefault(g => g.Capability == "autopilot")?.GroupId ?? "",
+                ["Autopilot:AllowedGroupName"] = _capabilityGates.FirstOrDefault(g => g.Capability == "autopilot")?.GroupName ?? "",
+                ["Rename:AllowedGroupId"] = _capabilityGates.FirstOrDefault(g => g.Capability == "rename")?.GroupId ?? "",
+                ["Rename:AllowedGroupName"] = _capabilityGates.FirstOrDefault(g => g.Capability == "rename")?.GroupName ?? "",
                 ["ActionStatus:PollMaxAgeHours"] = _pollMaxAgeHours.ToString(),
                 ["ActionStatusPoller:CronExpression"] = _pollerCron,
                 ["EventGrid:Enabled"] = _eventGridEnabled.ToString().ToLower(),
@@ -390,5 +456,74 @@ else
         }
         _saving = true;
         _saving = false;
+    }
+
+    // ---- Capability gate group typeahead ---------------------------------
+
+    private CancellationTokenSource? _gateSearchCts;
+
+    private async Task OnGateGroupSearch(CapabilityGateRow gate, ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        gate.GroupName = value;
+
+        _gateSearchCts?.Cancel();
+        _gateSearchCts = new CancellationTokenSource();
+        var token = _gateSearchCts.Token;
+
+        if (value.Length < 2)
+        {
+            gate.SearchResults.Clear();
+            gate.ShowDropdown = false;
+            return;
+        }
+
+        try { await Task.Delay(300, token); }
+        catch (TaskCanceledException) { return; }
+
+        try
+        {
+            var results = await DeviceLookup.SearchGroupsAsync(value, 10, token);
+            if (!token.IsCancellationRequested)
+            {
+                gate.SearchResults = results.ToList();
+                gate.ShowDropdown = gate.SearchResults.Count > 0;
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private void SelectGateGroup(CapabilityGateRow gate, GroupLookupResult group)
+    {
+        gate.GroupId = group.GroupId;
+        gate.GroupName = group.DisplayName;
+        gate.SearchResults.Clear();
+        gate.ShowDropdown = false;
+    }
+
+    private void ClearGateGroup(CapabilityGateRow gate)
+    {
+        gate.GroupId = "";
+        gate.GroupName = "";
+        gate.SearchResults.Clear();
+        gate.ShowDropdown = false;
+    }
+
+    private void OnGateGroupFocusOut(CapabilityGateRow gate)
+    {
+        _ = Task.Delay(200).ContinueWith(_ =>
+        {
+            gate.ShowDropdown = false;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private sealed class CapabilityGateRow
+    {
+        public string Capability { get; set; } = "";
+        public string GroupId { get; set; } = "";
+        public string GroupName { get; set; } = "";
+        public bool ShowDropdown { get; set; }
+        public List<GroupLookupResult> SearchResults { get; set; } = new();
     }
 }
