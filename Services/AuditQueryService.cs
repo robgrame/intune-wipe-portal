@@ -39,6 +39,7 @@ public sealed class AuditQueryService
     private const string ActionFailed    = "action.failed";
     private const string ActionPollTimeout = "action.poll-timeout";
     private const string ActionStateChanged = "action.state-changed";
+    private const string ActionScheduleGateDenied = "action.schedule.gate-denied";
 
     private readonly LogsQueryClient _client;
     private readonly string _workspaceId;
@@ -95,7 +96,8 @@ public sealed class AuditQueryService
                 case ActionFailed:      s.ActionFailed += row.Count;      break;
                 case ActionPollTimeout: s.ActionPollTimeout += row.Count; break;
                 default:
-                    if (row.EventName.StartsWith("action.denied.", StringComparison.Ordinal))
+                    if (row.EventName.StartsWith("action.denied.", StringComparison.Ordinal)
+                        || string.Equals(row.EventName, ActionScheduleGateDenied, StringComparison.Ordinal))
                         s.Denied += row.Count;
                     break;
             }
@@ -148,7 +150,7 @@ public sealed class AuditQueryService
         var query = $$"""
             AppEvents
             | where TimeGenerated > ago({{ToKql(window)}})
-            | where Name startswith "action.denied."
+            | where Name startswith "action.denied." or Name == "{{ActionScheduleGateDenied}}"
             {{actionTypeClause}}
             | summarize Count = count() by Name
             | order by Count desc
@@ -168,7 +170,7 @@ public sealed class AuditQueryService
         var query = $$"""
             AppEvents
             | where TimeGenerated > ago({{ToKql(window)}})
-            | where Name startswith "action.denied."
+            | where Name startswith "action.denied." or Name == "{{ActionScheduleGateDenied}}"
             {{actionTypeClause}}
             | project TimeGenerated,
                       Name,
@@ -178,7 +180,7 @@ public sealed class AuditQueryService
                       intuneDeviceId= tostring(Properties.intuneDeviceId),
                       entraDeviceId = tostring(Properties.entraDeviceId),
                       callerUpn     = tostring(Properties.callerUpn),
-                      reason        = tostring(Properties.reason)
+                      reason        = coalesce(tostring(Properties.reason), tostring(Properties.scheduleGateReason))
             | order by TimeGenerated desc
             | take {{take}}
             """;
@@ -218,7 +220,7 @@ public sealed class AuditQueryService
                      intune = tostring(Properties.intuneDeviceId),
                      entra  = tostring(Properties.entraDeviceId),
                      caller = tostring(Properties.callerUpn),
-                     reason = tostring(Properties.reason),
+                     reason = coalesce(tostring(Properties.reason), tostring(Properties.scheduleGateReason)),
                      exType = tostring(Properties.exceptionType)
             | project TimeGenerated, Name, corr, atype, device, intune, entra, caller, reason, exType
             | order by TimeGenerated desc
@@ -251,7 +253,7 @@ public sealed class AuditQueryService
                      intune = tostring(Properties.intuneDeviceId),
                      entra  = tostring(Properties.entraDeviceId),
                      caller = tostring(Properties.callerUpn),
-                     reason = tostring(Properties.reason),
+                     reason = coalesce(tostring(Properties.reason), tostring(Properties.scheduleGateReason)),
                      exType = tostring(Properties.exceptionType)
             | project TimeGenerated, Name, corr, atype, device, intune, entra, caller, reason, exType
             | order by TimeGenerated asc
@@ -429,7 +431,8 @@ public sealed class AuditQueryService
             | project corr, acceptedAt = TimeGenerated;
             let terminal = AppEvents
             | where TimeGenerated > ago({{ToKql(window)}})
-            | where Name in ("action.completed", "action.failed", "action.poll-timeout") or Name startswith "action.denied."
+            | where Name in ("action.completed", "action.failed", "action.poll-timeout", "{{ActionScheduleGateDenied}}")
+                or Name startswith "action.denied."
             | extend corr = tostring(Properties.correlationId)
             | project corr, terminalAt = TimeGenerated;
             accepted

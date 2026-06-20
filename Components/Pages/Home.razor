@@ -170,14 +170,7 @@ else
                                 <td>@(d.DeviceName ?? "—")</td>
                                 <td>@(d.ActionType ?? "—")</td>
                                 <td>
-                                    @if (!string.IsNullOrWhiteSpace(d.Reason))
-                                    {
-                                        @d.Reason
-                                    }
-                                    else
-                                    {
-                                        <code class="text-muted">@FriendlyDenyReason(d.EventName)</code>
-                                    }
+                                    @FriendlyDenyReason(d.Reason, d.EventName)
                                 </td>
                                 <td><code>@d.EventName</code></td>
                                 <td>
@@ -735,22 +728,29 @@ else
         catch { /* JS interop may fail during disconnect */ }
     }
 
-    private static string FriendlyDenyReason(string eventName) => eventName switch
+    private static string FriendlyDenyReason(string? reason, string eventName)
     {
-        var e when e.Contains("not-in-allowed-group") => "Device non nel gruppo autorizzato",
-        var e when e.Contains("group-check-failed") => "Verifica gruppo fallita",
-        var e when e.Contains("not-in-entra") => "Device non registrato in Entra ID",
-        var e when e.Contains("ownership-mismatch") => "Device non appartiene all'utente",
-        var e when e.Contains("rate-limited") => "Rate limit superato",
-        var e when e.Contains("device-resolve-failed") => "Risoluzione device fallita",
-        var e when e.Contains("managed-device-resolve-failed") => "Device gestito non trovato",
-        var e when e.Contains("already-issued") => "Azione già emessa",
-        var e when e.Contains("in-progress-elsewhere") => "Azione già in corso",
-        var e when e.Contains("missing-hardware-hash") => "Hardware hash mancante",
-        var e when e.Contains("missing-serial") => "Seriale mancante",
-        var e when e.Contains("name-collision") => "Collisione nome device",
-        _ => eventName
-    };
+        var key = string.IsNullOrWhiteSpace(reason) ? eventName : reason;
+        return key switch
+        {
+            var e when e.Contains("denied:not-enrolled-in-wave", StringComparison.OrdinalIgnoreCase) => "Device non incluso nella wave pianificata",
+            var e when e.Contains("not-in-allowed-group", StringComparison.OrdinalIgnoreCase) => "Device non nel gruppo autorizzato",
+            var e when e.Contains("user-not-in-allowed-group", StringComparison.OrdinalIgnoreCase) => "Utente non nel gruppo autorizzato",
+            var e when e.Contains("group-check-failed", StringComparison.OrdinalIgnoreCase) => "Verifica gruppo fallita",
+            var e when e.Contains("not-in-entra", StringComparison.OrdinalIgnoreCase) => "Device non registrato in Entra ID",
+            var e when e.Contains("ownership-mismatch", StringComparison.OrdinalIgnoreCase) => "Device non appartiene all'utente",
+            var e when e.Contains("rate-limited", StringComparison.OrdinalIgnoreCase) => "Rate limit superato",
+            var e when e.Contains("device-resolve-failed", StringComparison.OrdinalIgnoreCase) => "Risoluzione device fallita",
+            var e when e.Contains("managed-device-resolve-failed", StringComparison.OrdinalIgnoreCase) => "Device gestito non trovato",
+            var e when e.Contains("already-issued", StringComparison.OrdinalIgnoreCase) => "Azione già emessa",
+            var e when e.Contains("in-progress-elsewhere", StringComparison.OrdinalIgnoreCase) => "Azione già in corso",
+            var e when e.Contains("missing-hardware-hash", StringComparison.OrdinalIgnoreCase) => "Hardware hash mancante",
+            var e when e.Contains("missing-serial", StringComparison.OrdinalIgnoreCase) => "Seriale mancante",
+            var e when e.Contains("name-collision", StringComparison.OrdinalIgnoreCase) => "Collisione nome device",
+            "action.schedule.gate-denied" => "Richiesta bloccata dal gate di schedulazione",
+            _ => key
+        };
+    }
 
     private static string FriendlyFailReason(string eventName) => eventName switch
     {

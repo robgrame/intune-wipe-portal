@@ -68,6 +68,10 @@ public sealed class EventGridMetricsCollector
                 var device = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("deviceName", out var dn) ? dn.GetString() : null;
                 var corr = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("correlationId", out var cr) ? cr.GetString() : null;
                 var reason = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("reason", out var rn) ? rn.GetString() : null;
+                if (string.IsNullOrWhiteSpace(reason) && props.ValueKind == JsonValueKind.Object && props.TryGetProperty("scheduleGateReason", out var sgr))
+                {
+                    reason = sgr.GetString();
+                }
                 var actionType = props.ValueKind == JsonValueKind.Object && props.TryGetProperty("actionType", out var at) ? at.GetString() : null;
 
                 // Derive a human-readable reason from the eventName when explicit reason is absent
@@ -78,6 +82,7 @@ public sealed class EventGridMetricsCollector
                         var e when e.Contains("not-in-allowed-group", StringComparison.OrdinalIgnoreCase) => "Device non nel gruppo autorizzato",
                         var e when e.Contains("group-check-failed", StringComparison.OrdinalIgnoreCase) => "Verifica gruppo fallita",
                         var e when e.Contains("not-in-entra", StringComparison.OrdinalIgnoreCase) => "Device non registrato in Entra ID",
+                        var e when e.Contains("not-enrolled-in-wave", StringComparison.OrdinalIgnoreCase) => "Device non incluso nella wave pianificata",
                         _ => eventName
                     };
                 }

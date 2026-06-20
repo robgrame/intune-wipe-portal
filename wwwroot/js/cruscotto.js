@@ -404,7 +404,7 @@
         const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '—';
         const device = d.deviceName || '—';
         const action = d.actionType || '—';
-        const reason = d.reason || d.eventName || '—';
+        const reason = mapDeniedReason(d.reason, d.eventName);
         const corr = d.correlationId || '—';
         html += `<div class="denied-row">
           <div class="denied-row__main">
@@ -567,7 +567,7 @@
           const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '—';
           const device = d.deviceName || '—';
           const action = d.actionType || '—';
-          const reason = d.reason || d.eventName || '—';
+          const reason = mapDeniedReason(d.reason, d.eventName);
           const corr = d.correlationId || '—';
           html += `<tr>
             <td>${escapeHtml(time)}</td>
@@ -769,6 +769,19 @@
     // ─── search / trace / device ────────────────────────────────────────────
     function escapeHtml(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function mapDeniedReason(reason, eventName) {
+      const key = String(reason || eventName || '').toLowerCase();
+      if (key.includes('denied:not-enrolled-in-wave')) return 'Device non incluso nella wave pianificata';
+      if (key.includes('user-not-in-allowed-group')) return 'Utente non nel gruppo autorizzato';
+      if (key.includes('not-in-allowed-group')) return 'Device non nel gruppo autorizzato';
+      if (key.includes('group-check-failed')) return 'Verifica gruppo fallita';
+      if (key.includes('not-in-entra')) return 'Device non registrato in Entra ID';
+      if (key.includes('ownership-mismatch')) return 'Device non appartiene all\'utente richiedente';
+      if (key.includes('rate-limited')) return 'Troppi tentativi (rate limit)';
+      if (key.includes('device-resolve-failed')) return 'Risoluzione device fallita';
+      if (key === 'action.schedule.gate-denied') return 'Richiesta bloccata dal gate di schedulazione';
+      return reason || eventName || '—';
     }
     function showTab(name) {
       for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t.dataset.tab === name);

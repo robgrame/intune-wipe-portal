@@ -285,13 +285,13 @@ public sealed class CruscottoTelemetryService
             const string query = @"
                 AppEvents
                 | where TimeGenerated > ago(1h)
-                | where Name has '.denied'
+                | where Name startswith 'action.denied.' or Name == 'action.schedule.gate-denied'
                 | project TimeGenerated,
                           eventName = Name,
                           deviceName = tostring(Properties.deviceName),
                           correlationId = tostring(Properties.correlationId),
                           actionType = tostring(Properties.actionType),
-                          reason = tostring(Properties.reason)
+                          reason = coalesce(tostring(Properties.reason), tostring(Properties.scheduleGateReason))
                 | order by TimeGenerated desc
                 | take 20
             ";
@@ -566,12 +566,13 @@ public sealed class CruscottoTelemetryService
                 AppEvents
                 | where TimeGenerated > ago(30m)
                 | where Name has 'fallback.issued'
-                    or Name has '.denied'
+                    or Name startswith 'action.denied.'
+                    or Name == 'action.schedule.gate-denied'
                     or tostring(Properties.reason) has_any ('denied','not-in-entra','not-allowed','group')
                 | project TimeGenerated,
                           eventName = Name,
                           device = tostring(Properties.deviceName),
-                          reason = tostring(Properties.reason),
+                          reason = coalesce(tostring(Properties.reason), tostring(Properties.scheduleGateReason)),
                           corr = tostring(Properties.correlationId)
                 | order by TimeGenerated desc
                 | take 5
@@ -625,7 +626,7 @@ public sealed class CruscottoTelemetryService
                              role   = AppRoleName,
                              device = tostring(Properties.deviceName),
                              intune = tostring(Properties.intuneDeviceId),
-                             reason = tostring(Properties.reason),
+                             reason = coalesce(tostring(Properties.reason), tostring(Properties.scheduleGateReason)),
                              state = tostring(Properties.state),
                              terminal = tostring(Properties.terminalState),
                              rawStatus = tostring(Properties.rawStatus),
