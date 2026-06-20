@@ -18,33 +18,33 @@
     <i class="bi bi-info-circle-fill me-2 fs-5"></i>
     <div>
         <p class="mb-2">
-            Schedule device wipes into <strong>waves</strong>. A device enrolled in a
-            wave is deferred client-side until the wave's scheduled UTC time; the wipe
-            capability also enforces this server-side as defense-in-depth.
+            Pianifica i wipe dei device in <strong>waves</strong>. Un device incluso in una
+            wave viene posticipato client-side fino all'orario UTC pianificato della wave; la
+            wipe capability applica lo stesso vincolo anche server-side come defense-in-depth.
         </p>
         <p class="mb-2">
-            <strong>How a device joins a wave.</strong> A wave can target devices in two
-            ways, and <strong>either one is enough</strong> (they are combined, not
-            intersected):
+            <strong>Come un device entra in una wave.</strong> Una wave può selezionare i device
+            in due modi, e <strong>ne basta uno solo</strong> (sono combinati in unione, non in
+            intersezione):
         </p>
         <ul class="mb-2">
-            <li><strong>Individual devices</strong> — added explicitly to the wave's member list.</li>
-            <li><strong>Entra group</strong> — set the wave's Entra group; every member of that
-                group is enrolled automatically, with no individual row.</li>
+            <li><strong>Device individuali</strong> — aggiunti esplicitamente alla member list della wave.</li>
+            <li><strong>Entra group</strong> — imposta l'Entra group della wave; ogni membro di quel
+                gruppo viene incluso automaticamente, senza una riga individuale.</li>
         </ul>
         <p class="mb-2">
-            If a wave has <em>both</em> an Entra group and manually-added devices, the server
-            considers the <strong>union</strong>: a device passes the wave check when it is in
-            the member list <strong>or</strong> in the wave's Entra group. To exclude a device
-            entirely, remove it from <strong>both</strong>.
+            Se una wave ha <em>sia</em> un Entra group <em>sia</em> device aggiunti manualmente, il
+            server considera l'<strong>unione</strong>: un device supera il controllo della wave
+            quando è presente nella member list <strong>oppure</strong> nell'Entra group della wave.
+            Per escludere completamente un device, rimuovilo da <strong>entrambi</strong>.
         </p>
         <p class="mb-0">
-            <strong>Relation to the classic group gate.</strong> The per-wave Entra group is
-            separate from the capability-wide <em>allowed group</em> (the global wipe allowlist).
-            They are <strong>both required</strong>: a wipe proceeds only when the device is
-            enrolled in an active wave <em>and</em> — if an allowlist group is configured —
-            is a member of that allowlist. The wave decides <em>when</em>; the allowlist decides
-            <em>whether</em> the device may ever be wiped.
+            <strong>Relazione con il classic group gate.</strong> L'Entra group della singola wave è
+            distinto dall'<em>allowed group</em> a livello di capability (la global wipe allowlist).
+            Sono <strong>entrambi necessari</strong>: un wipe procede solo quando il device è incluso
+            in una wave attiva <em>e</em> — se è configurato un allowlist group — è membro di quella
+            allowlist. La wave decide <em>quando</em>; l'allowlist decide <em>se</em> il device può
+            mai essere sottoposto a wipe.
         </p>
     </div>
 </div>
