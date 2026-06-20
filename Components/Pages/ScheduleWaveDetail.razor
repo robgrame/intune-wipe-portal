@@ -1,6 +1,7 @@
 @page "/schedule/{WaveId:guid}"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Policy = "CanScheduleWrite")]
+@implements IAsyncDisposable
 @inject WipeScheduleService Svc
 @inject DeviceLookupService DeviceLookup
 @inject NavigationManager Nav
@@ -608,14 +609,24 @@ else
         _showDropdown = false;
     }
 
-    private void OnSearchFocusOut()
+    private async Task OnSearchFocusOut()
     {
         // Small delay to allow click on dropdown item to fire first
-        _ = Task.Delay(200).ContinueWith(_ =>
+        // Use _searchCts to cancel if component unmounts before delay completes
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+        
+        try
         {
-            _showDropdown = false;
-            InvokeAsync(StateHasChanged);
-        });
+            await Task.Delay(200, token);
+            if (!token.IsCancellationRequested)
+            {
+                _showDropdown = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
     }
 
     private async Task AddMember()
@@ -878,12 +889,32 @@ else
         finally { _busy = false; }
     }
 
-    private void OnGroupSearchFocusOut()
+    private async Task OnGroupSearchFocusOut()
     {
-        _ = Task.Delay(200).ContinueWith(_ =>
+        // Small delay to allow click on dropdown item to fire first
+        // Use _groupSearchCts to cancel if component unmounts before delay completes
+        _groupSearchCts?.Cancel();
+        _groupSearchCts = new CancellationTokenSource();
+        var token = _groupSearchCts.Token;
+        
+        try
         {
-            _showGroupDropdown = false;
-            InvokeAsync(StateHasChanged);
-        });
+            await Task.Delay(200, token);
+            if (!token.IsCancellationRequested)
+            {
+                _showGroupDropdown = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _groupSearchCts?.Cancel();
+        _groupSearchCts?.Dispose();
+        await ValueTask.CompletedTask;
     }
 }
