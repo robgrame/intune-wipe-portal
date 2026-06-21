@@ -93,6 +93,7 @@
     </div>
 </div>
 
+@if (!string.IsNullOrWhiteSpace(CorrelationId))
 {
     @* ── Trail per correlation ID specifico ── *@
     <h2 class="h5">Trail per <code>@CorrelationId</code></h2>
