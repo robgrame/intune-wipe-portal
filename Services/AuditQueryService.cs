@@ -230,6 +230,19 @@ public sealed class AuditQueryService
         return await ExecuteAsync(query, window, ct, MapAuditRow);
     }
 
+    /// <summary>
+    /// Restituisce gli eventi di audit nell'intervallo di osservazione
+    /// <paramref name="window"/> per l'export. Equivalente a
+    /// <see cref="GetRecentEventsAsync"/> ma con un limite di righe più alto
+    /// (default 10.000) adatto al download di un file. Ordina dal più recente.
+    /// </summary>
+    public Task<IReadOnlyList<AuditEventRow>> GetEventsForExportAsync(
+        TimeSpan window, CapabilityDescriptor capability, int maxRows, CancellationToken ct)
+    {
+        var take = Math.Clamp(maxRows, 1, 50_000);
+        return GetRecentEventsAsync(take, window, capability, ct);
+    }
+
     public async Task<IReadOnlyList<AuditEventRow>> GetTrailAsync(string correlationId, CancellationToken ct)
     {
         // Defensive: correlationId comes from a route parameter; reject anything
