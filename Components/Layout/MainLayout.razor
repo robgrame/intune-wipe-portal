@@ -20,7 +20,7 @@
                 <a href="about">About</a>
             </div>
             <p class="mb-1">
-                &copy; @DateTime.Now.Year - Intune Device Actions -
+                &copy; @DateTime.UtcNow.Year - Intune Device Actions -
                 <small class="text-muted">
                     <i class="bi bi-code-slash me-1"></i>
                     <span title="Application version">v@(GetVersion())</span>
@@ -28,9 +28,9 @@
             </p>
             <span class="d-flex align-items-center gap-3 flex-wrap justify-content-center mb-2">
                 <span title="Hosted on Microsoft Azure">
-                    <img src="images/Azure-A.svg" alt="Azure" style="height:14px;width:auto;vertical-align:middle;" class="me-1" />Running on Azure
+                    <img src="images/Azure-A.svg" alt="Azure" class="footer-azure-logo me-1" />Running on Azure
                 </span>
-                <span><i class="bi bi-heart-fill me-1 text-danger"></i>Made with passion for IT Admins</span>
+                <span><i class="bi bi-heart-fill me-1 text-danger"></i>Fatto con passione per gli IT Admin</span>
             </span>
         </div>
     </div>

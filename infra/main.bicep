@@ -85,6 +85,7 @@ var ledgerAcctResolved = empty(ledgerStorageAccountName)      ? toLower('${nameP
 var roleLogAnalyticsReader        = '73c42c96-874c-492b-b04d-ab87d138a893'
 var roleStorageBlobDataReader     = '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
 var roleServiceBusDataOwner       = '090c5cfd-751d-490a-894a-3ce6f1109419'
+var roleStorageTableDataContributor = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 
 // ---------------------------------------------------------------------------
 // User-assigned managed identity used by the portal to call the Log Analytics
@@ -138,6 +139,24 @@ resource ledgerReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04
     principalId: uami.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleStorageBlobDataReader)
+  }
+}
+
+// Reference the EXISTING Web-role storage account that holds the wipe-schedule
+// wave/member tables. The portal's /schedule page writes to these tables
+// directly via TableServiceClient, so the UAMI needs Storage Table Data
+// Contributor. Conditional: only created when a wipe-schedule storage account
+// is supplied. Previously this was a manual one-shot role assignment.
+resource wipeScheduleStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = if (!empty(wipeScheduleStorageAccount)) {
+  name: wipeScheduleStorageAccount
+}
+resource wipeScheduleTableAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(wipeScheduleStorageAccount)) {
+  scope: wipeScheduleStorage
+  name: guid(wipeScheduleStorage.id, uami.id, roleStorageTableDataContributor)
+  properties: {
+    principalId: uami.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleStorageTableDataContributor)
   }
 }
 

@@ -1,13 +1,26 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="it" data-bs-theme="light">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    @* Apply the persisted theme before first paint to avoid a flash of the
+       wrong color scheme (FOUC). Falls back to the OS preference. *@
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('portal-theme');
+                if (!t) {
+                    t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-bs-theme', t);
+            } catch (e) { /* localStorage unavailable */ }
+        })();
+    </script>
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap-icons/font/bootstrap-icons.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["intune-wipe-portal.styles.css"]" />
     <ImportMap />
@@ -23,7 +36,8 @@
 <body>
     <Routes />
     <ReconnectModal />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="@Assets["lib/chartjs/chart.umd.min.js"]"></script>
+    <script src="js/theme.js"></script>
     <script src="js/dashboard-charts.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>

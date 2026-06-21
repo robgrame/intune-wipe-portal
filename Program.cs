@@ -92,7 +92,24 @@ builder.Services.AddScoped<CircuitHandler, PortalCircuitHandler>();
 // Custom event tracker for portal operations (wave CRUD, config, certs, etc.)
 builder.Services.AddSingleton<PortalEventTracker>();
 
-builder.Services.AddSingleton(sp => new LogsQueryClient(sp.GetRequiredService<Azure.Core.TokenCredential>()));
+builder.Services.AddSingleton(sp =>
+{
+    // Centralized transient-fault handling for all KQL queries: a single
+    // workspace hiccup is retried with exponential backoff instead of
+    // surfacing as a raw error on the dashboards.
+    var options = new LogsQueryClientOptions
+    {
+        Retry =
+        {
+            Mode = Azure.Core.RetryMode.Exponential,
+            MaxRetries = 3,
+            Delay = TimeSpan.FromSeconds(1),
+            MaxDelay = TimeSpan.FromSeconds(10),
+            NetworkTimeout = TimeSpan.FromSeconds(30),
+        },
+    };
+    return new LogsQueryClient(sp.GetRequiredService<Azure.Core.TokenCredential>(), options);
+});
 builder.Services.AddSingleton<EventGridMetricsCollector>();
 builder.Services.AddSingleton<AuditQueryService>();
 builder.Services.AddSingleton<AuditExportService>();
@@ -111,6 +128,15 @@ builder.Services.AddSignalR()
         o.PayloadSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
+
+// --- Response compression. Brotli/Gzip over HTTPS for the larger static
+// assets (cruscotto.js ~55 KB, cruscotto.css ~13 KB) and SignalR/HTML payloads.
+builder.Services.AddResponseCompression(o =>
+{
+    o.EnableForHttps = true;
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
 
 // --- Razor components (Interactive Server) + cascading auth state so
 // AuthorizeView / AuthorizeRouteView work end-to-end.
@@ -131,6 +157,32 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseResponseCompression();
+
+// --- Security response headers. Hardens the portal against MIME sniffing,
+// clickjacking and referrer leakage, and applies a Content-Security-Policy.
+// All scripts/styles/fonts are now self-hosted (Bootstrap, Bootstrap Icons,
+// Chart.js), so the policy can stay tight; 'unsafe-inline' is retained for the
+// small inline theme bootstrap script and the inline styles still present in a
+// few Razor pages. connect-src allows the SignalR WebSocket back to the origin.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; " +
+        "font-src 'self'; " +
+        "connect-src 'self' wss: https:; " +
+        "frame-ancestors 'none'; " +
+        "base-uri 'self'; " +
+        "object-src 'none'";
+    await next();
+});
 
 if (!app.Environment.IsDevelopment())
 {

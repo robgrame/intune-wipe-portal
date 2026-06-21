@@ -136,10 +136,15 @@ consultando direttamente le stesse tabelle.
 `StorageAccountName` è il nome dello storage del **Web role** della API,
 NON di un account dedicato al portale.
 
-#### Role assignment necessario (manual one-shot)
+#### Role assignment necessario
 
 La UAMI del portale deve avere il ruolo **Storage Table Data Contributor**
-sullo storage account del Web role:
+sullo storage account del Web role. Questo role assignment è ora incluso nel
+modulo Bicep (`infra/main.bicep`) e viene creato automaticamente al deploy
+quando il parametro `wipeScheduleStorageAccount` è valorizzato.
+
+Se per qualche motivo lo storage non fosse gestito dallo stesso deploy, lo si
+può assegnare manualmente:
 
 ```pwsh
 $webStorage = az storage account show -g rg-idactions-dev `
@@ -150,8 +155,7 @@ az role assignment create --assignee $portalUami `
   --role 'Storage Table Data Contributor' --scope $webStorage
 ```
 
-Il role assignment è "deferito" — sarà spostato nel modulo Bicep al
-prossimo deploy infra. Senza di esso la pagina `/schedule` mostra
+Senza questo ruolo la pagina `/schedule` mostra
 "Permission denied" ma non rompe il resto del portale.
 
 #### Schema contract con la API repo
