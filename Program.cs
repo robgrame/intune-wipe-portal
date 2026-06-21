@@ -96,6 +96,7 @@ builder.Services.AddSingleton(sp => new LogsQueryClient(sp.GetRequiredService<Az
 builder.Services.AddSingleton<EventGridMetricsCollector>();
 builder.Services.AddSingleton<AuditQueryService>();
 builder.Services.AddSingleton<CruscottoTelemetryService>();
+builder.Services.AddSingleton<MetricsService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<AppConfigManagementService>();
 builder.Services.AddSingleton<DeviceLookupService>();

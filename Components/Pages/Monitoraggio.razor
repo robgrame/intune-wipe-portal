@@ -1,0 +1,441 @@
+@page "/monitoraggio"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using IntuneWipePortal.Services
+@inject MetricsService Metrics
+@inject IJSRuntime JS
+@implements IDisposable
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanRead")]
+
+@*
+    Pagina di Monitoraggio generale — vista d'insieme distinta dal Cruscotto
+    operativo. Mentre il Cruscotto traccia il flusso del singolo messaggio, qui
+    si raccolgono metriche aggregate: throughput, tempi di risposta, utilizzo
+    delle risorse per componente, potenziali bottleneck (operazioni/dipendenze
+    lente, eccezioni, code in arretrato) e statistiche su device e utenti.
+    Render interattivo server-side con grafici Chart.js (interop dashboardCharts).
+*@
+
+<PageTitle>Monitoraggio</PageTitle>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+        <h1 class="mb-1">Monitoraggio generale</h1>
+        <p class="text-muted mb-0">
+            Metriche aggregate sulla pipeline IntuneDeviceActions · finestra
+            <strong>@WindowLabel</strong>
+            @if (_snapshot is not null)
+            {
+                <span> · aggiornato @_snapshot.GeneratedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+            }
+        </p>
+    </div>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Finestra temporale">
+        @foreach (var w in Windows)
+        {
+            var active = w.Hours == _windowHours ? "btn-success" : "btn-outline-success";
+            <button type="button" class="btn @active" @onclick="() => SetWindowAsync(w.Hours)">@w.Label</button>
+        }
+    </div>
+</div>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger">Errore caricamento metriche: @_loadError</div>
+}
+
+@if (_snapshot is null)
+{
+    <p><em>Caricamento metriche…</em></p>
+}
+else
+{
+    var k = _snapshot.Kpis;
+
+    @if (!_snapshot.Kqlavailable)
+    {
+        <div class="alert alert-warning py-2">
+            Log Analytics non configurato (<code>Monitor:WorkspaceId</code>): le serie temporali e le
+            classifiche non sono disponibili. Sono mostrate solo le metriche delle code Service Bus.
+        </div>
+    }
+
+    @* ── KPI cards ── *@
+    <div class="row g-3 mb-3">
+        @KpiCard("Richieste accettate", k.TotalRequests.ToString("N0"), "bi-inbox", "primary")
+        @KpiCard("Messaggi processati", k.TotalProcessed.ToString("N0"), "bi-check2-circle", "success")
+        @KpiCard("Tempo risposta P95", k.P95ResponseMs.HasValue ? $"{k.P95ResponseMs:N0} ms" : "—", "bi-speedometer2", "info")
+        @KpiCard("Tempo risposta medio", k.AvgResponseMs.HasValue ? $"{k.AvgResponseMs:N0} ms" : "—", "bi-stopwatch", "info")
+        @KpiCard("Tasso di errore", $"{k.ErrorRatePercent:0.0}%", "bi-exclamation-triangle", k.ErrorRatePercent >= 10 ? "danger" : (k.ErrorRatePercent >= 3 ? "warning" : "success"))
+        @KpiCard("Device coinvolti", k.DistinctDevices.ToString("N0"), "bi-pc-display", "secondary")
+        @KpiCard("Utenti attivi", k.DistinctUsers.ToString("N0"), "bi-people", "secondary")
+        @KpiCard("Backlog code", k.QueueBacklog.ToString("N0"), "bi-stack", k.QueueBacklog > 0 ? "warning" : "success")
+        @KpiCard("Dead-letter", k.DeadLetters.ToString("N0"), "bi-trash", k.DeadLetters > 0 ? "danger" : "success")
+    </div>
+
+    @* ── Serie temporali ── *@
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Throughput messaggi</div>
+                <div class="card-body" style="height:300px;">
+                    <canvas id="chartThroughput"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Tempi di risposta (ms)</div>
+                <div class="card-body" style="height:300px;">
+                    <canvas id="chartResponse"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Esito azioni</div>
+                <div class="card-body" style="height:280px;">
+                    <canvas id="chartOutcome"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Carico per componente</div>
+                <div class="card-body" style="height:280px;">
+                    <canvas id="chartComponents"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Code Service Bus</div>
+                <div class="card-body" style="height:280px;">
+                    @if (_snapshot.Queues.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">Nessuna coda configurata.</p>
+                    }
+                    else
+                    {
+                        <canvas id="chartQueues"></canvas>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Bottleneck ── *@
+    <h2 class="h5 mt-4 mb-2"><i class="bi bi-hourglass-split me-1"></i>Potenziali bottleneck</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Operazioni più lente (P95)</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>Operazione</th><th>Componente</th><th class="text-end">Chiamate</th><th class="text-end">Errori</th><th class="text-end">P95 ms</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (_snapshot.SlowestOperations.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-muted small">Nessun dato.</td></tr>
+                            }
+                            @foreach (var op in _snapshot.SlowestOperations)
+                            {
+                                <tr>
+                                    <td class="text-truncate" style="max-width:220px;" title="@op.Operation">@op.Operation</td>
+                                    <td class="small text-muted">@op.Role</td>
+                                    <td class="text-end">@op.Count.ToString("N0")</td>
+                                    <td class="text-end @(op.Failures > 0 ? "text-danger" : "")">@op.Failures.ToString("N0")</td>
+                                    <td class="text-end fw-semibold">@(op.P95Ms?.ToString("N0") ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Dipendenze esterne più lente (P95)</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>Target</th><th>Tipo</th><th class="text-end">Chiamate</th><th class="text-end">Errori</th><th class="text-end">P95 ms</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (_snapshot.SlowestDependencies.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-muted small">Nessun dato.</td></tr>
+                            }
+                            @foreach (var dep in _snapshot.SlowestDependencies)
+                            {
+                                <tr>
+                                    <td class="text-truncate" style="max-width:220px;" title="@dep.Target">@dep.Target</td>
+                                    <td class="small text-muted">@dep.Type</td>
+                                    <td class="text-end">@dep.Calls.ToString("N0")</td>
+                                    <td class="text-end @(dep.Failures > 0 ? "text-danger" : "")">@dep.Failures.ToString("N0")</td>
+                                    <td class="text-end fw-semibold">@(dep.P95Ms?.ToString("N0") ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white fw-semibold">Eccezioni più frequenti</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>Tipo eccezione</th><th>Componente</th><th class="text-end">Occorrenze</th><th>Ultima</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (_snapshot.TopExceptions.Count == 0)
+                            {
+                                <tr><td colspan="4" class="text-muted small">Nessuna eccezione nella finestra. 🎉</td></tr>
+                            }
+                            @foreach (var ex in _snapshot.TopExceptions)
+                            {
+                                <tr>
+                                    <td class="text-truncate" style="max-width:360px;" title="@ex.Type">@ex.Type</td>
+                                    <td class="small text-muted">@ex.Role</td>
+                                    <td class="text-end fw-semibold text-danger">@ex.Count.ToString("N0")</td>
+                                    <td class="small text-muted">@(ex.LastSeen?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Device & utenti ── *@
+    <h2 class="h5 mt-4 mb-2"><i class="bi bi-diagram-3 me-1"></i>Device e utenti</h2>
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Device più attivi</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>Device</th><th class="text-end">Azioni</th><th class="text-end">Completate</th><th class="text-end">Fallite</th><th>Ultima</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (_snapshot.TopDevices.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-muted small">Nessun dato.</td></tr>
+                            }
+                            @foreach (var d in _snapshot.TopDevices)
+                            {
+                                <tr>
+                                    <td class="text-truncate" style="max-width:200px;" title="@d.Device">@d.Device</td>
+                                    <td class="text-end fw-semibold">@d.Actions.ToString("N0")</td>
+                                    <td class="text-end text-success">@d.Completed.ToString("N0")</td>
+                                    <td class="text-end @(d.Failed > 0 ? "text-danger" : "")">@d.Failed.ToString("N0")</td>
+                                    <td class="small text-muted">@(d.LastSeen?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-white fw-semibold">Utenti più attivi</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr><th>Utente</th><th class="text-end">Richieste</th><th class="text-end">Device</th><th>Ultima</th></tr>
+                        </thead>
+                        <tbody>
+                            @if (_snapshot.TopUsers.Count == 0)
+                            {
+                                <tr><td colspan="4" class="text-muted small">Nessun dato.</td></tr>
+                            }
+                            @foreach (var u in _snapshot.TopUsers)
+                            {
+                                <tr>
+                                    <td class="text-truncate" style="max-width:240px;" title="@u.Caller">@u.Caller</td>
+                                    <td class="text-end fw-semibold">@u.Requests.ToString("N0")</td>
+                                    <td class="text-end">@u.Devices.ToString("N0")</td>
+                                    <td class="small text-muted">@(u.LastSeen?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-muted small">
+        Refresh automatico ogni 60s · sorgenti: KQL (App Insights / Log Analytics) + ServiceBus admin · portale operatore
+    </p>
+}
+
+@code {
+    private record WindowOption(string Label, int Hours);
+
+    private static readonly WindowOption[] Windows =
+    {
+        new("6h", 6),
+        new("24h", 24),
+        new("72h", 72),
+        new("7g", 168),
+    };
+
+    private MonitoringSnapshot? _snapshot;
+    private string? _loadError;
+    private int _windowHours = 24;
+    private System.Threading.Timer? _timer;
+    private bool _chartsDirty;
+
+    private string WindowLabel => Windows.FirstOrDefault(w => w.Hours == _windowHours)?.Label ?? $"{_windowHours}h";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(LoadAsync);
+            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(RenderChartsAsync);
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_chartsDirty)
+        {
+            _chartsDirty = false;
+            await RenderChartsAsync();
+        }
+    }
+
+    private async Task SetWindowAsync(int hours)
+    {
+        if (hours == _windowHours) return;
+        _windowHours = hours;
+        _snapshot = null;
+        StateHasChanged();
+        await LoadAsync();
+        await RenderChartsAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _loadError = null;
+            _snapshot = await Metrics.GetSnapshotAsync(TimeSpan.FromHours(_windowHours), default);
+            _chartsDirty = true;
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+        }
+    }
+
+    private async Task RenderChartsAsync()
+    {
+        if (_snapshot is null) return;
+        try
+        {
+            var labels = _snapshot.Throughput.Select(p => FormatLabel(p.Timestamp)).ToArray();
+            if (labels.Length > 0)
+            {
+                await JS.InvokeVoidAsync("dashboardCharts.renderLine", "chartThroughput", labels,
+                    new object[]
+                    {
+                        new { label = "Accettate",  data = _snapshot.Throughput.Select(p => p.Accepted).ToArray(),  color = "#0d6efd", fill = true, fillColor = "rgba(13,110,253,.12)" },
+                        new { label = "Completate", data = _snapshot.Throughput.Select(p => p.Completed).ToArray(), color = "#198754", fill = false },
+                        new { label = "Fallite",    data = _snapshot.Throughput.Select(p => p.Failed).ToArray(),    color = "#dc3545", fill = false },
+                    },
+                    new { yTitle = "messaggi" });
+            }
+
+            var rtLabels = _snapshot.ResponseTimes.Select(p => FormatLabel(p.Timestamp)).ToArray();
+            if (rtLabels.Length > 0)
+            {
+                await JS.InvokeVoidAsync("dashboardCharts.renderLine", "chartResponse", rtLabels,
+                    new object[]
+                    {
+                        new { label = "Media", data = _snapshot.ResponseTimes.Select(p => p.AvgMs).ToArray(), color = "#6f42c1", fill = false },
+                        new { label = "P50",   data = _snapshot.ResponseTimes.Select(p => p.P50Ms).ToArray(), color = "#0dcaf0", fill = false },
+                        new { label = "P95",   data = _snapshot.ResponseTimes.Select(p => p.P95Ms).ToArray(), color = "#fd7e14", fill = true, fillColor = "rgba(253,126,20,.10)" },
+                    },
+                    new { yTitle = "ms" });
+            }
+
+            var o = _snapshot.Outcome;
+            await JS.InvokeVoidAsync("dashboardCharts.renderDoughnut", "chartOutcome",
+                new[] { "Completate", "Fallite", "Timeout", "Negate" },
+                new[] { o.Completed, o.Failed, o.Timeout, o.Denied },
+                new[] { "#198754", "#dc3545", "#ffc107", "#6c757d" });
+
+            if (_snapshot.ComponentLoad.Count > 0)
+            {
+                var compLabels = _snapshot.ComponentLoad.Select(c => ShortRole(c.Role)).ToArray();
+                await JS.InvokeVoidAsync("dashboardCharts.renderStackedBar", "chartComponents", compLabels,
+                    new object[]
+                    {
+                        new { label = "OK",     data = _snapshot.ComponentLoad.Select(c => c.Requests - c.Failures).ToArray(), color = "#198754" },
+                        new { label = "Errori", data = _snapshot.ComponentLoad.Select(c => c.Failures).ToArray(),              color = "#dc3545" },
+                    },
+                    true);
+            }
+
+            if (_snapshot.Queues.Count > 0)
+            {
+                var qLabels = _snapshot.Queues.Select(q => q.Name).ToArray();
+                await JS.InvokeVoidAsync("dashboardCharts.renderStackedBar", "chartQueues", qLabels,
+                    new object[]
+                    {
+                        new { label = "Attivi",      data = _snapshot.Queues.Select(q => q.Active).ToArray(),     color = "#0d6efd" },
+                        new { label = "Dead-letter", data = _snapshot.Queues.Select(q => q.DeadLetter).ToArray(), color = "#dc3545" },
+                    },
+                    false);
+            }
+        }
+        catch { /* JS interop may fail during disconnect */ }
+    }
+
+    private string FormatLabel(DateTimeOffset ts)
+    {
+        var local = ts.ToLocalTime();
+        return _windowHours <= 24 ? local.ToString("HH:mm") : local.ToString("dd/MM HH:mm");
+    }
+
+    private static string ShortRole(string role)
+    {
+        if (string.IsNullOrEmpty(role)) return "(n/d)";
+        // idactions-proc-dev -> proc
+        var parts = role.Split('-');
+        return parts.Length >= 2 ? parts[1] : role;
+    }
+
+    private RenderFragment KpiCard(string title, string value, string icon, string color) => __builder =>
+    {
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted text-uppercase d-flex align-items-center gap-1" style="font-size:.68rem;">
+                        <i class="bi @icon text-@color"></i><span>@title</span>
+                    </div>
+                    <div class="fw-bold fs-5 text-@color">@value</div>
+                </div>
+            </div>
+        </div>
+    };
+
+    public void Dispose() => _timer?.Dispose();
+}
