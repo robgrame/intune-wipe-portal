@@ -5,10 +5,10 @@
 @inject NavigationManager Nav
 @inject ILogger<Schedule> Log
 
-<PageTitle>Wipe schedule</PageTitle>
+<PageTitle>Schedule</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 m-0">Wipe schedule</h1>
+    <h1 class="h3 m-0">Schedule</h1>
     <button class="btn btn-primary" @onclick="StartCreate" disabled="@_creating">
         <i class="bi bi-plus-circle"></i> New wave
     </button>
@@ -18,9 +18,9 @@
     <i class="bi bi-info-circle-fill me-2 fs-5"></i>
     <div>
         <p class="mb-2">
-            Pianifica i wipe dei device in <strong>waves</strong>. Un device incluso in una
+            Pianifica le azioni sui device in <strong>waves</strong>. Un device incluso in una
             wave viene posticipato client-side fino all'orario UTC pianificato della wave; la
-            wipe capability applica lo stesso vincolo anche server-side come defense-in-depth.
+            capability corrispondente applica lo stesso vincolo anche server-side come defense-in-depth.
         </p>
         <p class="mb-2">
             <strong>Come un device entra in una wave.</strong> Una wave può selezionare i device
@@ -40,11 +40,11 @@
         </p>
         <p class="mb-0">
             <strong>Relazione con il classic group gate.</strong> L'Entra group della singola wave è
-            distinto dall'<em>allowed group</em> a livello di capability (la global wipe allowlist).
-            Sono <strong>entrambi necessari</strong>: un wipe procede solo quando il device è incluso
+            distinto dall'<em>allowed group</em> a livello di capability (l'allowlist globale della capability).
+            Sono <strong>entrambi necessari</strong>: un'azione procede solo quando il device è incluso
             in una wave attiva <em>e</em> — se è configurato un allowlist group — è membro di quella
             allowlist. La wave decide <em>quando</em>; l'allowlist decide <em>se</em> il device può
-            mai essere sottoposto a wipe.
+            mai essere sottoposto all'azione.
         </p>
     </div>
 </div>
@@ -193,7 +193,7 @@ else
         }
         catch (Exception ex)
         {
-            Log.LogError(ex, "Failed to list wipe waves.");
+            Log.LogError(ex, "Failed to list waves.");
             _listError = ex.Message;
         }
         finally
