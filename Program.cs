@@ -95,6 +95,7 @@ builder.Services.AddSingleton<PortalEventTracker>();
 builder.Services.AddSingleton(sp => new LogsQueryClient(sp.GetRequiredService<Azure.Core.TokenCredential>()));
 builder.Services.AddSingleton<EventGridMetricsCollector>();
 builder.Services.AddSingleton<AuditQueryService>();
+builder.Services.AddSingleton<AuditExportService>();
 builder.Services.AddSingleton<CruscottoTelemetryService>();
 builder.Services.AddSingleton<MetricsService>();
 builder.Services.AddMemoryCache();

@@ -34,7 +34,65 @@
     </div>
 </div>
 
-@if (!string.IsNullOrWhiteSpace(CorrelationId))
+@* ── Export audit trail ── *@
+<div class="card mb-4">
+    <div class="card-header py-2 d-flex align-items-center">
+        <i class="bi bi-download me-2"></i>
+        <span class="fw-semibold">Export audit</span>
+    </div>
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-0">Formato file</label>
+                <select class="form-select form-select-sm" @bind="_exportFormat">
+                    <option value="csv">CSV (.csv)</option>
+                    <option value="xlsx">Excel (.xlsx)</option>
+                    <option value="json">JSON (.json)</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-0">Periodo di osservazione</label>
+                <select class="form-select form-select-sm" @bind="_exportHours">
+                    <option value="24">Ultime 24 ore</option>
+                    <option value="72">Ultime 72 ore</option>
+                    <option value="168">Ultimi 7 giorni</option>
+                    <option value="336">Ultimi 14 giorni</option>
+                    <option value="720">Ultimi 30 giorni</option>
+                    <option value="2160">Ultimi 90 giorni</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-0">Capability</label>
+                <select class="form-select form-select-sm" @bind="_exportCapability">
+                    <option value="__all__">Tutte</option>
+                    @if (_tabs is not null)
+                    {
+                        @foreach (var cap in _tabs.Where(c => !c.IsAll))
+                        {
+                            <option value="@cap.ActionTypeValue">@cap.DisplayName</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-0">Nome file (opzionale)</label>
+                <input class="form-control form-control-sm" @bind="_exportFileName"
+                       placeholder="audit-export" />
+            </div>
+        </div>
+        <div class="d-flex justify-content-end mt-2">
+            <a class="btn btn-success btn-sm" href="@ExportUrl" target="_top"
+               rel="noopener" title="Scarica gli eventi di audit nel formato e periodo selezionati">
+                <i class="bi bi-file-earmark-arrow-down"></i> Esporta
+            </a>
+        </div>
+        <p class="text-muted small mb-0 mt-1">
+            Il file viene scaricato dal browser: al click potrai scegliere il percorso di salvataggio.
+            Massimo 10.000 eventi per export.
+        </p>
+    </div>
+</div>
+
 {
     @* ── Trail per correlation ID specifico ── *@
     <h2 class="h5">Trail per <code>@CorrelationId</code></h2>
@@ -163,6 +221,28 @@ else
     private bool _loading;
     private string? _error;
     private IReadOnlyList<AuditEventRow>? _events;
+
+    // Export state
+    private string _exportFormat = "csv";
+    private string _exportHours = "72";
+    private string _exportCapability = "__all__";
+    private string _exportFileName = string.Empty;
+
+    private string ExportUrl
+    {
+        get
+        {
+            var qs = new List<string>
+            {
+                $"format={Uri.EscapeDataString(_exportFormat)}",
+                $"hours={Uri.EscapeDataString(_exportHours)}",
+                $"capability={Uri.EscapeDataString(_exportCapability)}",
+            };
+            if (!string.IsNullOrWhiteSpace(_exportFileName))
+                qs.Add($"fileName={Uri.EscapeDataString(_exportFileName.Trim())}");
+            return "/api/audit/export?" + string.Join("&", qs);
+        }
+    }
 
     // Recent events state
     private IReadOnlyList<CapabilityDescriptor>? _tabs;
