@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.Monitor.Query;
+using System.Security.Claims;
 using IntuneWipePortal.Hubs;
 using IntuneWipePortal.Services;
 using Microsoft.ApplicationInsights.Extensibility;
@@ -17,17 +18,6 @@ var builder = WebApplication.CreateBuilder(args);
 // require an authenticated user; app roles gate read access (see below).
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
-
-// Ensure role-based authorization (RequireRole / User.IsInRole) matches the
-// Entra "roles" claim emitted for app-role assignments. Without an explicit
-// RoleClaimType, IsInRole checks the default ClaimTypes.Role URI and silently
-// finds nothing even when the token carries roles, producing a spurious
-// "access denied" for correctly-assigned users.
-builder.Services.Configure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(
-    OpenIdConnectDefaults.AuthenticationScheme, o =>
-{
-    o.TokenValidationParameters.RoleClaimType = "roles";
-});
 
 // When endpoint authorization fails because the user is authenticated but
 // lacks the required role, send them to a friendly access-denied page
@@ -70,7 +60,15 @@ builder.Services.AddAuthorization(options =>
     {
         "Actions.Observer", "Actions.Auditor",
     };
-    options.AddPolicy("CanRead", p => p.RequireRole(readRoles));
+    static bool HasRole(ClaimsPrincipal user, string role) =>
+        user.Claims.Any(c =>
+            (c.Type == "roles" ||
+             c.Type == System.Security.Claims.ClaimTypes.Role) &&
+            string.Equals(c.Value, role, StringComparison.OrdinalIgnoreCase));
+
+    options.AddPolicy("CanRead", p => p
+        .RequireAuthenticatedUser()
+        .RequireAssertion(ctx => readRoles.Any(r => HasRole(ctx.User, r))));
 
     // Write access to the schedule pages (create/edit/delete waves and
     // membership) requires an explicit operator role. Fail-closed: with
@@ -78,12 +76,13 @@ builder.Services.AddAuthorization(options =>
     // 403, while the read pages (Dashboard / Audit) remain accessible.
     // Add the role to the app registration when an operator should be
     // able to schedule wipes.
-    options.AddPolicy("CanScheduleWrite",
-        p => p.RequireRole("Actions.Operator"));
+    options.AddPolicy("CanScheduleWrite", p => p
+        .RequireAuthenticatedUser()
+        .RequireAssertion(ctx => HasRole(ctx.User, "Actions.Operator")));
 
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireRole(readRoles)
+        .RequireAssertion(ctx => readRoles.Any(r => HasRole(ctx.User, r)))
         .Build();
 });
 
