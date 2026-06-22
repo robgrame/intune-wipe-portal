@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
-using intune_wipe_portal.Components;
+using IntuneWipePortal.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,14 +28,12 @@ builder.Services.ConfigureApplicationCookie(o =>
 builder.Services.AddAuthorization(options =>
 {
     // Either role grants read access; Auditor exists for future export
-    // features. Old "Wipe.*" role names are kept in the list to support a
-    // single rolling token-refresh window after the rename — they can be
-    // removed once all users have re-signed-in and the app registration
-    // exposes only the new "Actions.*" roles.
+    // features. The legacy "Wipe.*" role names were retained transitionally
+    // for a single rolling token-refresh window after the rename; that window
+    // has now passed, so only the "Actions.*" roles are accepted.
     var readRoles = new[]
     {
         "Actions.Observer", "Actions.Auditor",
-        "Wipe.Observer", "Wipe.Auditor", // legacy, transitional
     };
     options.AddPolicy("CanRead", p => p.RequireRole(readRoles));
 

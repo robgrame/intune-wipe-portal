@@ -39,10 +39,10 @@ Gli utenti autenticati ma privi di ruolo vedono una pagina **Accesso negato**.
 > **Migrazione dai ruoli legacy `Wipe.Observer` / `Wipe.Auditor`**: i GUID
 > degli app role nel file `infra/entra/app-roles.json` sono invariati, quindi
 > rieseguire `create-app-registration.ps1` aggiorna il displayName e il claim
-> value emesso nei token **senza perdere le assegnazioni esistenti**. Il
-> portale accetta temporaneamente sia i nomi `Actions.*` che `Wipe.*` per
-> coprire la finestra di refresh dei token; i nomi legacy potranno essere
-> rimossi in un release successivo.
+> value emesso nei token **senza perdere le assegnazioni esistenti**. La
+> finestra di refresh dei token successiva alla rinomina è ormai conclusa: il
+> portale accetta **solo** i nomi `Actions.*` e i vecchi nomi `Wipe.*` non sono
+> più riconosciuti.
 
 ### Setup app registration
 
