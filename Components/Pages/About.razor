@@ -85,7 +85,9 @@
         @{
             var asm = System.Reflection.Assembly.GetEntryAssembly();
             var attrs = asm?.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
-            var ver = attrs?.Length > 0 ? ((System.Reflection.AssemblyInformationalVersionAttribute)attrs[0]).InformationalVersion : "dev";
+            var rawVer = attrs?.Length > 0 ? ((System.Reflection.AssemblyInformationalVersionAttribute)attrs[0]).InformationalVersion : "dev";
+            var plusIdx = rawVer.IndexOf('+');
+            var ver = plusIdx >= 0 ? rawVer[..plusIdx] : rawVer;
         }
         <p><strong>Versione:</strong> @ver</p>
         <p>

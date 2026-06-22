@@ -47,6 +47,9 @@
     {
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
         var infoAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
-        return infoAttr?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "dev";
+        var raw = infoAttr?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "dev";
+        // Show only the build version (e.g. "1.1.25"), dropping the "+<git-hash>" suffix.
+        var plus = raw.IndexOf('+');
+        return plus >= 0 ? raw[..plus] : raw;
     }
 }
