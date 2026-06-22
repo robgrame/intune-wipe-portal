@@ -30,7 +30,23 @@ builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
 builder.Services.Configure<CookieAuthenticationOptions>(
     CookieAuthenticationDefaults.AuthenticationScheme, o =>
 {
+    // Authenticated but missing role → friendly access-denied page.
     o.AccessDeniedPath = "/access-denied";
+    // Unauthenticated → friendly courtesy page with an explicit "Accedi"
+    // button instead of an opaque auto-redirect to Entra. The button on that
+    // page triggers MicrosoftIdentity/Account/SignIn (an explicit OIDC
+    // challenge), so SSO still works on click.
+    o.LoginPath = "/access-denied";
+});
+
+// Route implicit challenges (the FallbackPolicy below kicks unauthenticated
+// users out) through the Cookies scheme so they land on the courtesy page at
+// LoginPath, rather than the OpenIdConnect scheme which would auto-redirect to
+// the Entra login. Explicit sign-in via the MicrosoftIdentity controller still
+// challenges OpenIdConnect directly and is unaffected.
+builder.Services.Configure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(o =>
+{
+    o.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 });
 
 builder.Services.AddAuthorization(options =>

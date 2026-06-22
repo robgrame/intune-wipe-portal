@@ -1,23 +1,88 @@
 @page "/access-denied"
 @layout MainLayout
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Nav
 
-@* Public page: the access-denied redirect target configured via
-   ConfigureApplicationCookie. Reached when the user IS authenticated
-   but does not hold the required role policy. *@
+@* Public courtesy page. Two ways to get here:
+   - Cookie LoginPath  → user is NOT authenticated (show the login link).
+   - Cookie AccessDeniedPath → user IS authenticated but lacks a required app
+     role (explain which role is missing and offer account switch).
+   Both branches are rendered from a single page so the operator always sees a
+   clear explanation rather than a raw 403 or a redirect loop. *@
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 
-<PageTitle>Accesso negato</PageTitle>
+<PageTitle>Accesso al portale</PageTitle>
 
-<div class="container py-5">
-    <h1 class="h3 text-danger">Accesso negato</h1>
-    <p>
-        Il tuo account è stato autenticato ma non ha uno dei ruoli applicativi
-        richiesti (<code>Actions.Observer</code> oppure <code>Actions.Auditor</code>)
-        sulla app registration <em>Intune Device Actions Portal</em>.
-    </p>
-    <p>
-        Contatta l'amministratore del tenant per richiedere l'assegnazione.
-    </p>
-    <a class="btn btn-outline-secondary"
-       href="MicrosoftIdentity/Account/SignOut">Esci</a>
+<div class="container py-5" style="max-width: 720px;">
+    <AuthorizeView>
+        <NotAuthorized>
+            @* Not signed in. *@
+            <h1 class="h3 mb-3">Accesso richiesto</h1>
+            <p class="text-muted">
+                Per utilizzare <em>Intune Device Actions Portal</em> devi
+                autenticarti con il tuo account aziendale (Microsoft Entra ID).
+            </p>
+            <p>
+                Verrai reindirizzato alla pagina di accesso Microsoft. Dopo il
+                login tornerai automaticamente alla pagina richiesta.
+            </p>
+            <a class="btn btn-primary" href="@SignInHref">
+                <span class="me-1">🔑</span> Accedi
+            </a>
+        </NotAuthorized>
+        <Authorized>
+            @* Signed in but missing the required app role. *@
+            <h1 class="h3 text-danger mb-3">Accesso negato</h1>
+            <p>
+                Sei autenticato come
+                <strong>@context.User.Identity?.Name</strong>, ma il tuo account
+                non possiede uno dei ruoli applicativi richiesti per accedere a
+                questa sezione.
+            </p>
+            <ul>
+                <li><code>Actions.Observer</code> — lettura dashboard e audit trail</li>
+                <li><code>Actions.Auditor</code> — lettura + export audit (futuro)</li>
+                <li><code>Actions.Operator</code> — gestione delle schedulazioni (wave)</li>
+            </ul>
+            <p class="text-muted">
+                Contatta l'amministratore della app registration
+                <em>Intune Device Actions Portal</em> per richiedere
+                l'assegnazione del ruolo opportuno. Una volta assegnato, esci e
+                accedi di nuovo per aggiornare il token.
+            </p>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-primary" href="@SignInHref">
+                    Cambia account
+                </a>
+                <a class="btn btn-outline-secondary"
+                   href="MicrosoftIdentity/Account/SignOut">
+                    Esci
+                </a>
+            </div>
+        </Authorized>
+    </AuthorizeView>
 </div>
+
+@code {
+    // Build an explicit OIDC sign-in link, preserving the ReturnUrl the cookie
+    // middleware appended when it redirected an unauthenticated user here.
+    private string SignInHref
+    {
+        get
+        {
+            var uri = new Uri(Nav.Uri);
+            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers
+                .ParseQuery(uri.Query);
+            var returnUrl = query.TryGetValue("ReturnUrl", out var r)
+                ? r.ToString()
+                : "/";
+            if (string.IsNullOrWhiteSpace(returnUrl) ||
+                !returnUrl.StartsWith('/'))
+            {
+                returnUrl = "/";
+            }
+            return "MicrosoftIdentity/Account/SignIn?redirectUri=" +
+                Uri.EscapeDataString(returnUrl);
+        }
+    }
+}
