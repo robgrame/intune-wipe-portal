@@ -66,7 +66,7 @@ public sealed partial class CruscottoTelemetryService
             }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "Cruscotto: KQL trace by-corr failed for {Corr}", correlationId);
+                _log.LogWarning(ex, "Cruscotto: KQL trace by-corr failed for {Corr}", ForLog(correlationId));
             }
         }
 
@@ -80,7 +80,7 @@ public sealed partial class CruscottoTelemetryService
                 entry = JsonSerializer.Deserialize<LedgerEntry>(resp.Value.Content.ToMemory().Span);
             }
             catch (RequestFailedException ex) when (ex.Status == 404) { /* no ledger — fine */ }
-            catch (Exception ex) { _log.LogDebug(ex, "Cruscotto: ledger lookup for {Id} failed", intuneId); }
+            catch (Exception ex) { _log.LogDebug(ex, "Cruscotto: ledger lookup for {Id} failed", ForLog(intuneId)); }
         }
 
         var recommendation = Recommend(correlationId, events, entry);
@@ -161,7 +161,7 @@ public sealed partial class CruscottoTelemetryService
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Cruscotto: RecentByDevice KQL failed for {Key}", key);
+            _log.LogWarning(ex, "Cruscotto: RecentByDevice KQL failed for {Key}", ForLog(key));
             return Array.Empty<DeviceRequestRow>();
         }
     }

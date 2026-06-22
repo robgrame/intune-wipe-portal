@@ -215,6 +215,21 @@ public sealed partial class CruscottoTelemetryService
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
+    /// <summary>
+    /// Strips CR/LF (and other control characters) from a caller-supplied value
+    /// before it is written to a log, to prevent log-forging / log-injection.
+    /// </summary>
+    private static string ForLog(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder(value.Length);
+        foreach (var c in value)
+            sb.Append(char.IsControl(c) ? ' ' : c);
+        return sb.ToString();
+    }
+
     private static string? ResolveSubscriptionIdFromWebsiteOwnerName()
     {
         var owner = Environment.GetEnvironmentVariable("WEBSITE_OWNER_NAME");

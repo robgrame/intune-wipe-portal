@@ -45,7 +45,7 @@ public sealed partial class CruscottoTelemetryService
             }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "Cruscotto: queue {Queue} runtime lookup failed", name);
+                _log.LogWarning(ex, "Cruscotto: queue {Queue} runtime lookup failed", ForLog(name));
                 results.Add(new QueueStatus(name, 0, 0, 0, null, NodeHealth.Unknown, ex.GetType().Name));
             }
         }

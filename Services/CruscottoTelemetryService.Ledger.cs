@@ -110,7 +110,7 @@ public sealed partial class CruscottoTelemetryService
 
             await client.DeleteAsync(cancellationToken: ct);
             _log.LogInformation("Ledger entry {IntuneDeviceId} archived as {Archive} and deleted (reason: {Reason})",
-                intuneDeviceId, archiveName, reason);
+                ForLog(intuneDeviceId), ForLog(archiveName), ForLog(reason));
             return (true, archiveName);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
