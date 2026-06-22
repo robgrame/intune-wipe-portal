@@ -58,7 +58,8 @@ builder.Services.AddAuthorization(options =>
     // has now passed, so only the "Actions.*" roles are accepted.
     var readRoles = new[]
     {
-        "Actions.Observer", "Actions.Auditor",
+        // Operator is a superset capability and must include read access.
+        "Actions.Observer", "Actions.Auditor", "Actions.Operator",
     };
     static bool HasRole(ClaimsPrincipal user, string role) =>
         user.Claims.Any(c =>

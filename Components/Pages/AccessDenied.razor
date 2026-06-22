@@ -65,6 +65,14 @@
                     Dettagli tecnici del token
                 </summary>
                 <div class="mt-2 small">
+                    @{
+                        var oid = context.User.Claims
+                            .FirstOrDefault(c => c.Type == "oid"
+                                || c.Type.EndsWith("/objectidentifier"))?.Value;
+                        var tid = context.User.Claims
+                            .FirstOrDefault(c => c.Type == "tid"
+                                || c.Type.EndsWith("/tenantid"))?.Value;
+                    }
                     <p class="mb-1">
                         Ruoli presenti nel token:
                         @{
@@ -90,6 +98,10 @@
                         Tipi di claim nel token:
                         <code>@string.Join(", ",
                             context.User.Claims.Select(c => c.Type).Distinct())</code>
+                    </p>
+                    <p class="mb-1 text-muted">
+                        OID: <code>@(string.IsNullOrWhiteSpace(oid) ? "n/a" : oid)</code>
+                        — TID: <code>@(string.IsNullOrWhiteSpace(tid) ? "n/a" : tid)</code>
                     </p>
                 </div>
             </details>
