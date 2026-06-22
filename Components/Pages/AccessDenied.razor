@@ -59,6 +59,40 @@
                     Esci
                 </a>
             </div>
+
+            <details class="mt-4">
+                <summary class="text-muted" style="cursor:pointer;">
+                    Dettagli tecnici del token
+                </summary>
+                <div class="mt-2 small">
+                    <p class="mb-1">
+                        Ruoli presenti nel token:
+                        @{
+                            var roleClaims = context.User.Claims
+                                .Where(c => c.Type == "roles"
+                                    || c.Type == System.Security.Claims.ClaimTypes.Role)
+                                .Select(c => c.Value)
+                                .ToList();
+                        }
+                        @if (roleClaims.Count == 0)
+                        {
+                            <strong class="text-danger">nessuno</strong>
+                            <span> — il token non contiene il claim
+                            <code>roles</code>. Esci completamente e accedi di
+                            nuovo per rigenerarlo dopo l'assegnazione.</span>
+                        }
+                        else
+                        {
+                            <strong>@string.Join(", ", roleClaims)</strong>
+                        }
+                    </p>
+                    <p class="mb-1 text-muted">
+                        Tipi di claim nel token:
+                        <code>@string.Join(", ",
+                            context.User.Claims.Select(c => c.Type).Distinct())</code>
+                    </p>
+                </div>
+            </details>
         </Authorized>
     </AuthorizeView>
 </div>

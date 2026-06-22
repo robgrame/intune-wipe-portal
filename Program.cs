@@ -18,6 +18,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
+// Ensure role-based authorization (RequireRole / User.IsInRole) matches the
+// Entra "roles" claim emitted for app-role assignments. Without an explicit
+// RoleClaimType, IsInRole checks the default ClaimTypes.Role URI and silently
+// finds nothing even when the token carries roles, producing a spurious
+// "access denied" for correctly-assigned users.
+builder.Services.Configure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(
+    OpenIdConnectDefaults.AuthenticationScheme, o =>
+{
+    o.TokenValidationParameters.RoleClaimType = "roles";
+});
+
 // When endpoint authorization fails because the user is authenticated but
 // lacks the required role, send them to a friendly access-denied page
 // instead of looping. NOTE: Microsoft.Identity.Web signs the user in with the
