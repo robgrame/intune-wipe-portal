@@ -6,9 +6,9 @@
 @inject IJSRuntime JS
 @implements IDisposable
 
-<PageTitle>Action dashboard</PageTitle>
+<PageTitle>Dashboard azioni</PageTitle>
 
-<h1 class="mb-3">Intune device actions dashboard</h1>
+<h1 class="mb-3">Dashboard azioni dispositivi Intune</h1>
 <p class="text-muted">
     Ultime 24 ore · refresh ogni 60s · capability:
     <strong>@_capability.DisplayName</strong>
@@ -16,7 +16,10 @@
 
 @if (_tabs is null)
 {
-    <p><em>Discovering capabilities…</em></p>
+    <div class="d-flex align-items-center text-muted gap-2">
+        <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+        <span>Individuazione capability…</span>
+    </div>
 }
 else
 {
@@ -52,21 +55,34 @@ else
     };
     var bannerIcon = _health.OverallStatus switch
     {
-        NodeHealth.Green => "✅",
-        NodeHealth.Yellow => "⚠️",
-        NodeHealth.Red => "🚨",
-        _ => "❔"
+        NodeHealth.Green => "bi-check-circle-fill",
+        NodeHealth.Yellow => "bi-exclamation-triangle-fill",
+        NodeHealth.Red => "bi-exclamation-octagon-fill",
+        _ => "bi-question-circle-fill"
     };
-    <div class="alert @bannerCss mb-3 d-flex align-items-center justify-content-between" style="cursor:pointer" @onclick="() => _showHealthDetail = !_showHealthDetail">
+    var bannerIconLabel = _health.OverallStatus switch
+    {
+        NodeHealth.Green => "Stato OK",
+        NodeHealth.Yellow => "Attenzione",
+        NodeHealth.Red => "Critico",
+        _ => "Stato sconosciuto"
+    };
+    <button type="button"
+            class="alert @bannerCss mb-3 d-flex align-items-center justify-content-between w-100 text-start border-0"
+            aria-expanded="@_showHealthDetail.ToString().ToLowerInvariant()"
+            @onclick="() => _showHealthDetail = !_showHealthDetail">
         <div>
-            <strong>@bannerIcon @_health.StatusLabel</strong>
+            <strong>
+                <i class="bi @bannerIcon me-1" role="img" aria-label="@bannerIconLabel"></i>
+                @_health.StatusLabel
+            </strong>
             @if (_health.Issues.Count > 0)
             {
                 <span class="ms-2 text-muted">(@_health.Issues.Count problema/i rilevato/i — clicca per dettagli)</span>
             }
         </div>
         <small class="text-muted">infra health</small>
-    </div>
+    </button>
     @if (_showHealthDetail && _health.Issues.Count > 0)
     {
         <div class="card mb-3">
@@ -78,7 +94,7 @@ else
                     {
                         var rowCss = issue.Severity == "critical" ? "table-danger" : issue.Severity == "warning" ? "table-warning" : "";
                         <tr class="@rowCss">
-                            <td>@issue.Icon</td>
+                            <td><i class="bi @issue.Icon" role="img" aria-label="@issue.Severity"></i></td>
                             <td>@issue.Message</td>
                         </tr>
                     }
@@ -91,7 +107,10 @@ else
 
 @if (_kpis is null)
 {
-    <p><em>Loading...</em></p>
+    <div class="d-flex align-items-center text-muted gap-2">
+        <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+        <span>Caricamento…</span>
+    </div>
 }
 else
 {
@@ -141,7 +160,7 @@ else
     {
         <div class="alert alert-warning mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">🚫 Richieste negate — dettaglio (24h)</h5>
+                <h5 class="mb-0"><i class="bi bi-slash-circle me-1"></i>Richieste negate — dettaglio (24h)</h5>
                 <button type="button" class="btn-close" @onclick="() => _showDeniedPanel = false"></button>
             </div>
             @if (_deniedDetails is null || _deniedDetails.Count == 0)
@@ -192,7 +211,7 @@ else
     {
         <div class="alert alert-danger mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">💀 Azioni fallite — dettaglio (24h)</h5>
+                <h5 class="mb-0"><i class="bi bi-x-octagon-fill me-1"></i>Azioni fallite — dettaglio (24h)</h5>
                 <button type="button" class="btn-close" @onclick="() => _showFailedPanel = false"></button>
             </div>
             @if (_failedDetails is null || _failedDetails.Count == 0)
@@ -316,7 +335,7 @@ else
     }
 
     <h2 class="h5 mt-4 d-flex align-items-center gap-2">
-        🔒 Ledger bloccate
+        <i class="bi bi-lock-fill me-1"></i>Ledger bloccate
         @if (_stuckEntries is { Count: > 0 })
         {
             <span class="badge bg-danger">@_stuckEntries.Count</span>
@@ -365,7 +384,7 @@ else
                         }
                         else if (_resetDone.Contains(s.IntuneDeviceId))
                         {
-                            <span class="text-success">✅ Sbloccata</span>
+                            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Sbloccata</span>
                         }
                         else
                         {
@@ -608,42 +627,42 @@ else
 
         // Check DLQ
         foreach (var q in snapshot.Queues.Where(q => q.DeadLetter > 0))
-            issues.Add(new HealthIssue("critical", "💀", $"Coda '{q.Name}' ha {q.DeadLetter} messaggi in Dead Letter Queue"));
+            issues.Add(new HealthIssue("critical", "bi-trash3-fill text-danger", $"Coda '{q.Name}' ha {q.DeadLetter} messaggi in Dead Letter Queue"));
 
         // Check queue backlog
         foreach (var q in snapshot.Queues.Where(q => q.Active >= 20))
-            issues.Add(new HealthIssue("warning", "📥", $"Coda '{q.Name}' ha {q.Active} messaggi in attesa — possibile backlog"));
+            issues.Add(new HealthIssue("warning", "bi-inbox-fill text-warning", $"Coda '{q.Name}' ha {q.Active} messaggi in attesa — possibile backlog"));
 
         // Check ledger stuck
         if (snapshot.Ledger.StuckEntries > 0)
-            issues.Add(new HealthIssue("warning", "🔒", $"{snapshot.Ledger.StuckEntries} entry nel ledger bloccate da oltre {snapshot.Ledger.GraceHours}h — i device coinvolti non accettano nuove azioni"));
+            issues.Add(new HealthIssue("warning", "bi-lock-fill text-warning", $"{snapshot.Ledger.StuckEntries} entry nel ledger bloccate da oltre {snapshot.Ledger.GraceHours}h — i device coinvolti non accettano nuove azioni"));
 
         // Check ledger error
         if (snapshot.Ledger.Error is not null)
-            issues.Add(new HealthIssue("critical", "⚠️", $"Ispezione ledger fallita: {snapshot.Ledger.Error}"));
+            issues.Add(new HealthIssue("critical", "bi-exclamation-triangle-fill text-danger", $"Ispezione ledger fallita: {snapshot.Ledger.Error}"));
 
         // Check Function Apps
         foreach (var (role, fa) in snapshot.Diagnostics.FunctionApps)
         {
             if (fa.Health == NodeHealth.Red)
-                issues.Add(new HealthIssue("critical", "🔴", $"Function App '{fa.AppName}' in stato critico: {fa.LastError ?? "nessun dettaglio"}"));
+                issues.Add(new HealthIssue("critical", "bi-x-circle-fill text-danger", $"Function App '{fa.AppName}' in stato critico: {fa.LastError ?? "nessun dettaglio"}"));
             else if (fa.Health == NodeHealth.Yellow)
-                issues.Add(new HealthIssue("warning", "🟡", $"Function App '{fa.AppName}' degradata (errori recenti: {fa.Failures30m})"));
+                issues.Add(new HealthIssue("warning", "bi-exclamation-circle-fill text-warning", $"Function App '{fa.AppName}' degradata (errori recenti: {fa.Failures30m})"));
         }
 
         // Check poller
         if (snapshot.Diagnostics.PollerHealth == NodeHealth.Red)
-            issues.Add(new HealthIssue("critical", "⏱️", "Status poller fermo — nessuna invocazione recente"));
+            issues.Add(new HealthIssue("critical", "bi-clock-fill text-danger", "Status poller fermo — nessuna invocazione recente"));
         else if (snapshot.Diagnostics.PollerHealth == NodeHealth.Yellow)
-            issues.Add(new HealthIssue("warning", "⏱️", "Status poller rallentato"));
+            issues.Add(new HealthIssue("warning", "bi-clock-history text-warning", "Status poller rallentato"));
 
         // Check denied (last hour)
         if (snapshot.DeniedRequests.Count >= 5)
-            issues.Add(new HealthIssue("warning", "🚫", $"{snapshot.DeniedRequests.Count} richieste negate nell'ultima ora — verificare autorizzazioni dispositivi"));
+            issues.Add(new HealthIssue("warning", "bi-slash-circle text-warning", $"{snapshot.DeniedRequests.Count} richieste negate nell'ultima ora — verificare autorizzazioni dispositivi"));
 
         // Diagnostics issues
         foreach (var d in snapshot.Diagnostics.Issues)
-            issues.Add(new HealthIssue("info", "ℹ️", d));
+            issues.Add(new HealthIssue("info", "bi-info-circle-fill text-secondary", d));
 
         var overall = issues.Any(i => i.Severity == "critical") ? NodeHealth.Red
                     : issues.Any(i => i.Severity == "warning") ? NodeHealth.Yellow

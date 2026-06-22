@@ -39,10 +39,10 @@ Gli utenti autenticati ma privi di ruolo vedono una pagina **Accesso negato**.
 > **Migrazione dai ruoli legacy `Wipe.Observer` / `Wipe.Auditor`**: i GUID
 > degli app role nel file `infra/entra/app-roles.json` sono invariati, quindi
 > rieseguire `create-app-registration.ps1` aggiorna il displayName e il claim
-> value emesso nei token **senza perdere le assegnazioni esistenti**. Il
-> portale accetta temporaneamente sia i nomi `Actions.*` che `Wipe.*` per
-> coprire la finestra di refresh dei token; i nomi legacy potranno essere
-> rimossi in un release successivo.
+> value emesso nei token **senza perdere le assegnazioni esistenti**. La
+> finestra di refresh dei token successiva alla rinomina è ormai conclusa: il
+> portale accetta **solo** i nomi `Actions.*` e i vecchi nomi `Wipe.*` non sono
+> più riconosciuti.
 
 ### Setup app registration
 
@@ -136,10 +136,15 @@ consultando direttamente le stesse tabelle.
 `StorageAccountName` è il nome dello storage del **Web role** della API,
 NON di un account dedicato al portale.
 
-#### Role assignment necessario (manual one-shot)
+#### Role assignment necessario
 
 La UAMI del portale deve avere il ruolo **Storage Table Data Contributor**
-sullo storage account del Web role:
+sullo storage account del Web role. Questo role assignment è ora incluso nel
+modulo Bicep (`infra/main.bicep`) e viene creato automaticamente al deploy
+quando il parametro `wipeScheduleStorageAccount` è valorizzato.
+
+Se per qualche motivo lo storage non fosse gestito dallo stesso deploy, lo si
+può assegnare manualmente:
 
 ```pwsh
 $webStorage = az storage account show -g rg-idactions-dev `
@@ -150,8 +155,7 @@ az role assignment create --assignee $portalUami `
   --role 'Storage Table Data Contributor' --scope $webStorage
 ```
 
-Il role assignment è "deferito" — sarà spostato nel modulo Bicep al
-prossimo deploy infra. Senza di esso la pagina `/schedule` mostra
+Senza questo ruolo la pagina `/schedule` mostra
 "Permission denied" ma non rompe il resto del portale.
 
 #### Schema contract con la API repo
@@ -171,6 +175,16 @@ dotnet run
 L'app si autentica con `DefaultAzureCredential` → Azure CLI (`az login`)
 per le query KQL. Per il sign-in OIDC serve aver creato la app registration
 e popolato `appsettings.json` o `appsettings.Development.json`.
+
+### Test
+
+I test unitari vivono in `tests/IntuneWipePortal.Tests` (xUnit) e coprono la
+logica pura senza dipendenze Azure (parsing bulk import, serializzazione
+dell'export audit). Eseguili con:
+
+```powershell
+dotnet test tests/IntuneWipePortal.Tests
+```
 
 ## Stack
 

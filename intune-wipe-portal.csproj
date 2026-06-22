@@ -4,10 +4,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>intune_wipe_portal</RootNamespace>
+    <RootNamespace>IntuneWipePortal</RootNamespace>
     <AssemblyName>$(AssemblyName.Replace(' ', '_'))</AssemblyName>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
+
+  <!-- The test project lives under tests/ inside this folder; keep its sources
+       out of the web app compilation (the Web SDK otherwise globs **/*.cs). -->
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <Content Remove="tests/**/*" />
+    <None Remove="tests/**/*" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Data.AppConfiguration" Version="1.5.0" />

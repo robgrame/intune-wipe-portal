@@ -44,12 +44,22 @@
                         <i class="bi bi-person-circle"></i>
                         @context.User.Identity?.Name
                     </span>
+                    <button type="button" class="btn btn-sm btn-outline-light me-2 theme-toggle"
+                            title="Cambia tema chiaro/scuro" aria-label="Cambia tema chiaro/scuro"
+                            onclick="window.portalTheme.toggle()">
+                        <i class="bi bi-circle-half"></i>
+                    </button>
                     <a class="btn btn-sm btn-outline-light"
-                       href="MicrosoftIdentity/Account/SignOut">Sign out</a>
+                       href="MicrosoftIdentity/Account/SignOut">Esci</a>
                 </Authorized>
                 <NotAuthorized>
+                    <button type="button" class="btn btn-sm btn-outline-light me-2 theme-toggle"
+                            title="Cambia tema chiaro/scuro" aria-label="Cambia tema chiaro/scuro"
+                            onclick="window.portalTheme.toggle()">
+                        <i class="bi bi-circle-half"></i>
+                    </button>
                     <a class="btn btn-sm btn-outline-light"
-                       href="MicrosoftIdentity/Account/SignIn">Sign in</a>
+                       href="MicrosoftIdentity/Account/SignIn">Accedi</a>
                 </NotAuthorized>
             </AuthorizeView>
         </div>

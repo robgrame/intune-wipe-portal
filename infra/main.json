@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "5404028493903919623"
+      "version": "0.44.1.10279",
+      "templateHash": "2737075544735996663"
     }
   },
   "parameters": {
@@ -139,7 +139,8 @@
     "ledgerAcctResolved": "[if(empty(parameters('ledgerStorageAccountName')), toLower(format('{0}stp{1}', parameters('namePrefix'), variables('suffix'))), parameters('ledgerStorageAccountName'))]",
     "roleLogAnalyticsReader": "73c42c96-874c-492b-b04d-ab87d138a893",
     "roleStorageBlobDataReader": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
-    "roleServiceBusDataOwner": "090c5cfd-751d-490a-894a-3ce6f1109419"
+    "roleServiceBusDataOwner": "090c5cfd-751d-490a-894a-3ce6f1109419",
+    "roleStorageTableDataContributor": "0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3"
   },
   "resources": [
     {
@@ -185,6 +186,21 @@
         "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
         "principalType": "ServicePrincipal",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleStorageBlobDataReader'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('wipeScheduleStorageAccount')))]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('wipeScheduleStorageAccount'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('wipeScheduleStorageAccount')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), variables('roleStorageTableDataContributor'))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleStorageTableDataContributor'))]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"

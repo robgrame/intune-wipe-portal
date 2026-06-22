@@ -98,7 +98,7 @@
     @* ── Trail per correlation ID specifico ── *@
     <h2 class="h5">Trail per <code>@CorrelationId</code></h2>
 
-    @if (_loading) { <p><em>Loading...</em></p> }
+    @if (_loading) { <div class="d-flex align-items-center text-muted gap-2"><div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div><span>Caricamento…</span></div> }
     else if (_error is not null) { <div class="alert alert-danger">@_error</div> }
     else if (_events is null || _events.Count == 0) { <p class="text-muted">Nessun evento trovato per questo correlation ID.</p> }
     else
@@ -157,7 +157,7 @@ else
         </div>
     </div>
 
-    @if (_loadingRecent) { <p><em>Caricamento eventi recenti...</em></p> }
+    @if (_loadingRecent) { <div class="d-flex align-items-center text-muted gap-2"><div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div><span>Caricamento eventi recenti…</span></div> }
     else if (_recentError is not null) { <div class="alert alert-danger">@_recentError</div> }
     else if (_recentEvents is null || _recentEvents.Count == 0)
     {

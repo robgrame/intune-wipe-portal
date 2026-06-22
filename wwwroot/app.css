@@ -17,6 +17,22 @@ html, body {
     background-color: #f6f8f7;
 }
 
+/* Dark theme overrides. Bootstrap 5.3 recolors its own components via
+   data-bs-theme="dark"; these rules adjust the portal's custom surfaces and
+   brand-tinted elements that Bootstrap does not own. */
+[data-bs-theme="dark"] {
+    --brand-green: #1fae73;
+    --brand-green-dark: #15875a;
+    --brand-green-light: #29c486;
+    --brand-green-50: #15291f;
+    --focus-ring: rgba(41, 196, 134, 0.4);
+}
+
+[data-bs-theme="dark"] html,
+[data-bs-theme="dark"] body {
+    background-color: #14181b;
+}
+
 a, .btn-link {
     color: var(--brand-green-dark);
 }
@@ -88,6 +104,15 @@ a:hover {
 
 h1, h2, h3, .h1, .h2, .h3 {
     color: #1f2d24;
+}
+
+[data-bs-theme="dark"] h1,
+[data-bs-theme="dark"] h2,
+[data-bs-theme="dark"] h3,
+[data-bs-theme="dark"] .h1,
+[data-bs-theme="dark"] .h2,
+[data-bs-theme="dark"] .h3 {
+    color: #e3ece7;
 }
 
 h1:focus {

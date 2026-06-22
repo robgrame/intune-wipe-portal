@@ -16,7 +16,7 @@
 
 @if (_loading)
 {
-    <p><em>Caricamento configurazione…</em></p>
+    <div class="d-flex align-items-center text-muted gap-2"><div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div><span>Caricamento configurazione…</span></div>
 }
 else
 {
@@ -65,7 +65,7 @@ else
                                 <td><code class="small">@cert.Thumbprint</code></td>
                                 <td class="small @(cert.IsExpired ? "text-danger fw-bold" : "")">
                                     @cert.NotAfter.ToString("yyyy-MM-dd")
-                                    @if (cert.IsExpired) { <span> ⚠️</span> }
+                                    @if (cert.IsExpired) { <i class="bi bi-exclamation-triangle-fill text-danger ms-1" role="img" aria-label="Scaduto"></i> }
                                 </td>
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveCert(cert)"
@@ -329,7 +329,7 @@ else
         @if (_saved)
         {
             <div class="alert alert-success mt-3" role="alert">
-                ✅ Configurazione salvata. Le modifiche saranno attive entro 30 secondi.
+                <i class="bi bi-check-circle-fill me-1"></i>Configurazione salvata. Le modifiche saranno attive entro 30 secondi.
             </div>
         }
         @if (_error is not null)

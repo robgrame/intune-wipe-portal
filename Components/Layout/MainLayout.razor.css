@@ -43,6 +43,22 @@ main {
     text-decoration: underline;
 }
 
+[data-bs-theme="dark"] .modern-footer {
+    background: #1b2024;
+    border-top-color: #2c343a;
+    color: #9aa6a0;
+}
+
+[data-bs-theme="dark"] .modern-footer .footer-links a {
+    color: #9aa6a0;
+}
+
+.footer-azure-logo {
+    height: 14px;
+    width: auto;
+    vertical-align: middle;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;
