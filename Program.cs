@@ -3,6 +3,7 @@ using Azure.Monitor.Query;
 using IntuneWipePortal.Hubs;
 using IntuneWipePortal.Services;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Server.Circuits;
@@ -19,8 +20,15 @@ builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
 
 // When endpoint authorization fails because the user is authenticated but
 // lacks the required role, send them to a friendly access-denied page
-// instead of an opaque 403.
-builder.Services.ConfigureApplicationCookie(o =>
+// instead of looping. NOTE: Microsoft.Identity.Web signs the user in with the
+// Cookies scheme (CookieAuthenticationDefaults.AuthenticationScheme), NOT the
+// ASP.NET Identity "Identity.Application" scheme that ConfigureApplicationCookie
+// targets. Configuring the wrong scheme left AccessDeniedPath at its default
+// "/Account/AccessDenied", which is itself gated by the role FallbackPolicy →
+// Forbid → redirect → infinite ERR_TOO_MANY_REDIRECTS loop. Configure the
+// correct scheme so Forbid lands on the [AllowAnonymous] /access-denied page.
+builder.Services.Configure<CookieAuthenticationOptions>(
+    CookieAuthenticationDefaults.AuthenticationScheme, o =>
 {
     o.AccessDeniedPath = "/access-denied";
 });
