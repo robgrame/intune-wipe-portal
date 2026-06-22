@@ -1,7 +1,10 @@
 @page "/access-denied"
 @layout MainLayout
 @using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<AccessDenied> Log
 
 @* Public courtesy page. Two ways to get here:
    - Cookie LoginPath  → user is NOT authenticated (show the login link).
@@ -110,6 +113,8 @@
 </div>
 
 @code {
+    private bool _loggedClaims;
+
     // Build an explicit OIDC sign-in link, preserving the ReturnUrl the cookie
     // middleware appended when it redirected an unauthenticated user here.
     private string SignInHref
@@ -130,5 +135,37 @@
             return "MicrosoftIdentity/Account/SignIn?redirectUri=" +
                 Uri.EscapeDataString(returnUrl);
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loggedClaims) return;
+        _loggedClaims = true;
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        if (!(user.Identity?.IsAuthenticated ?? false))
+        {
+            Log.LogInformation("AccessDenied page reached by unauthenticated user.");
+            return;
+        }
+
+        var oid = user.Claims.FirstOrDefault(c =>
+            c.Type == "oid" || c.Type.EndsWith("/objectidentifier"))?.Value;
+        var tid = user.Claims.FirstOrDefault(c =>
+            c.Type == "tid" || c.Type.EndsWith("/tenantid"))?.Value;
+        var roles = user.Claims
+            .Where(c => c.Type == "roles" || c.Type == ClaimTypes.Role)
+            .Select(c => c.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Log.LogWarning(
+            "AccessDenied authenticated user. Name={Name} Oid={Oid} Tid={Tid} Roles=[{Roles}] ClaimTypes=[{ClaimTypes}]",
+            user.Identity?.Name,
+            oid,
+            tid,
+            string.Join(", ", roles),
+            string.Join(", ", user.Claims.Select(c => c.Type).Distinct()));
     }
 }
