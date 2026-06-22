@@ -9,6 +9,14 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <!-- The test project lives under tests/ inside this folder; keep its sources
+       out of the web app compilation (the Web SDK otherwise globs **/*.cs). -->
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <Content Remove="tests/**/*" />
+    <None Remove="tests/**/*" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Azure.Data.AppConfiguration" Version="1.5.0" />
     <PackageReference Include="Azure.Data.Tables" Version="12.9.1" />

@@ -176,6 +176,16 @@ L'app si autentica con `DefaultAzureCredential` → Azure CLI (`az login`)
 per le query KQL. Per il sign-in OIDC serve aver creato la app registration
 e popolato `appsettings.json` o `appsettings.Development.json`.
 
+### Test
+
+I test unitari vivono in `tests/IntuneWipePortal.Tests` (xUnit) e coprono la
+logica pura senza dipendenze Azure (parsing bulk import, serializzazione
+dell'export audit). Eseguili con:
+
+```powershell
+dotnet test tests/IntuneWipePortal.Tests
+```
+
 ## Stack
 
 - Blazor Server interactive · .NET 10
