@@ -305,7 +305,8 @@ else
                 {
                     <p class="text-muted small mb-2">
                         Associa un gruppo Entra ID a questa wave. Tutti i device membri del gruppo saranno automaticamente
-                        inclusi nella wave (in alternativa o aggiunta ai device individuali).
+                        inclusi nella wave (in alternativa o aggiunta ai device individuali). Dopo la selezione,
+                        conferma con <strong>Save gruppo</strong>.
                     </p>
 
                     @if (!string.IsNullOrEmpty(_wave.EntraGroupId))
@@ -344,6 +345,34 @@ else
                                     }
                                 </div>
                             }
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Selezione</label>
+                            @if (!string.IsNullOrWhiteSpace(_pendingGroupId))
+                            {
+                                <div class="small mb-2">
+                                    <strong>@(_pendingGroupName ?? _pendingGroupId)</strong><br />
+                                    <code>@_pendingGroupId</code>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-muted small mb-2">Nessun gruppo selezionato.</div>
+                            }
+                            <div class="d-grid gap-1">
+                                <button class="btn btn-primary btn-sm"
+                                        type="button"
+                                        @onclick="SaveSelectedGroup"
+                                        disabled="@(_busy || string.IsNullOrWhiteSpace(_pendingGroupId) || _pendingGroupId == _wave.EntraGroupId)">
+                                    Save gruppo
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm"
+                                        type="button"
+                                        @onclick="ClearSelectedGroup"
+                                        disabled="@(_busy || string.IsNullOrWhiteSpace(_pendingGroupId))">
+                                    Annulla selezione
+                                </button>
+                            </div>
                         </div>
                     </div>
                 }
@@ -808,11 +837,16 @@ else
     private List<GroupLookupResult> _groupSearchResults = new();
     private bool _showGroupDropdown;
     private CancellationTokenSource? _groupSearchCts;
+    private string? _pendingGroupId;
+    private string? _pendingGroupName;
 
     private async Task OnGroupSearchInput(ChangeEventArgs e)
     {
         var value = e.Value?.ToString() ?? string.Empty;
         _groupSearchText = value;
+        // Editing the search text invalidates any prior "selected but unsaved" group.
+        _pendingGroupId = null;
+        _pendingGroupName = null;
 
         _groupSearchCts?.Cancel();
         _groupSearchCts = new CancellationTokenSource();
@@ -852,16 +886,35 @@ else
         _groupSearchText = group.DisplayName;
         _groupSearchResults.Clear();
         _showGroupDropdown = false;
+        _pendingGroupId = group.GroupId;
+        _pendingGroupName = group.DisplayName;
+        await InvokeAsync(StateHasChanged);
+    }
 
-        // Persist group association immediately
+    private void ClearSelectedGroup()
+    {
+        _pendingGroupId = null;
+        _pendingGroupName = null;
+        _groupSearchText = string.Empty;
+        _groupSearchResults.Clear();
+        _showGroupDropdown = false;
+    }
+
+    private async Task SaveSelectedGroup()
+    {
+        if (_wave is null || string.IsNullOrWhiteSpace(_pendingGroupId))
+        {
+            return;
+        }
+
         _busy = true; _error = null;
         try
         {
-            await Svc.UpdateWaveAsync(WaveId, _wave!.Name,
+            await Svc.UpdateWaveAsync(WaveId, _wave.Name,
                 _wave.ScheduledAtUtc, _wave.Status, _wave.Description,
-                _wave.ActionType, group.GroupId, group.DisplayName);
+                _wave.ActionType, _pendingGroupId, _pendingGroupName ?? _pendingGroupId);
             await ReloadAsync();
-            _groupSearchText = "";
+            ClearSelectedGroup();
         }
         catch (Exception ex)
         {
@@ -880,6 +933,7 @@ else
                 _wave.ScheduledAtUtc, _wave.Status, _wave.Description,
                 _wave.ActionType, null, null);
             await ReloadAsync();
+            ClearSelectedGroup();
         }
         catch (Exception ex)
         {
