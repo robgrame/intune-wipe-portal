@@ -17,6 +17,19 @@ html, body {
     background-color: #f6f8f7;
 }
 
+/* Sticky footer: make the body a full-height flex column so the layout's
+   <main> can grow and push the footer to the bottom of the viewport even when
+   the page content is short. */
+html {
+    height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Dark theme overrides. Bootstrap 5.3 recolors its own components via
    data-bs-theme="dark"; these rules adjust the portal's custom surfaces and
    brand-tinted elements that Bootstrap does not own. */

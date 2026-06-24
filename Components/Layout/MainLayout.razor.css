@@ -1,7 +1,10 @@
-/* Full-width layout under top navbar. */
+/* Full-width layout under top navbar. Grows to fill available height so the
+   footer is pushed to the bottom of the viewport (sticky-footer pattern; the
+   <body> is a flex column — see app.css). */
 main {
     display: block;
     width: 100%;
+    flex: 1 0 auto;
 }
 
 .content {
@@ -16,6 +19,7 @@ main {
     text-align: center;
     font-size: 0.85rem;
     color: #6c757d;
+    flex-shrink: 0;
 }
 
 .modern-footer .footer-content {
