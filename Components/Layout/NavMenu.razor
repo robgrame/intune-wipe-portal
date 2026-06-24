@@ -1,3 +1,5 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
 <nav class="navbar navbar-expand-md navbar-dark navbar-brand-green sticky-top shadow-sm">
     <div class="container-fluid">
         <a class="navbar-brand d-flex align-items-center gap-2" href="">
@@ -34,6 +36,25 @@
                 <li class="nav-item">
                     <NavLink class="nav-link" href="audit">Audit</NavLink>
                 </li>
+                @if (GrafanaLinks.Count > 0)
+                {
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">Grafana</a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            @foreach (var link in GrafanaLinks)
+                            {
+                                <li>
+                                    <a class="dropdown-item" href="@link.Url"
+                                       target="_blank" rel="noopener noreferrer">
+                                        @link.Title
+                                        <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </li>
+                }
                 <li class="nav-item">
                     <NavLink class="nav-link" href="about">About</NavLink>
                 </li>
@@ -65,3 +86,33 @@
         </div>
     </div>
 </nav>
+
+@code {
+    private sealed record GrafanaLink(string Title, string Url);
+
+    private List<GrafanaLink> GrafanaLinks { get; set; } = new();
+
+    protected override void OnInitialized()
+    {
+        var section = Configuration.GetSection("Grafana");
+        var baseUrl = section["BaseUrl"]?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return;
+        }
+
+        var kiosk = section.GetValue("Kiosk", true);
+        var query = kiosk ? "?kiosk" : string.Empty;
+
+        foreach (var dash in section.GetSection("Dashboards").GetChildren())
+        {
+            var title = dash["Title"];
+            var uid = dash["Uid"];
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(uid))
+            {
+                continue;
+            }
+            GrafanaLinks.Add(new GrafanaLink(title, $"{baseUrl}/d/{uid}{query}"));
+        }
+    }
+}
