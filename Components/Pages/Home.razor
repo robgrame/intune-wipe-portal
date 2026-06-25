@@ -510,7 +510,20 @@ else
                         }
                     </td>
                     <td>@(e.ActionType ?? "-")</td>
-                    <td>@(e.DeviceName ?? "-")</td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(e.DeviceName))
+                        {
+                            @e.DeviceName
+                        }
+                        else if (!string.IsNullOrEmpty(e.EntraDeviceId))
+                        {
+                            <span class="font-monospace small" title="Entra device ID (nome non disponibile per questo evento)">@e.EntraDeviceId</span>
+                        }
+                        else
+                        {
+                            @("-")
+                        }
+                    </td>
                     <td>@(e.Reason ?? "-")</td>
                     <td>
                         @if (!string.IsNullOrEmpty(e.CorrelationId))
@@ -805,6 +818,7 @@ else
                 CorrelationId: newest.CorrelationId,
                 ActionType: newest.ActionType,
                 DeviceName: newest.DeviceName,
+                EntraDeviceId: newest.EntraDeviceId,
                 Reason: summary,
                 IsCollapsedGroup: true,
                 GroupedEvents: events));
@@ -821,6 +835,7 @@ else
                 CorrelationId: e.CorrelationId,
                 ActionType: e.ActionType,
                 DeviceName: e.DeviceName,
+                EntraDeviceId: e.EntraDeviceId,
                 Reason: e.Reason,
                 IsCollapsedGroup: false,
                 GroupedEvents: null));
@@ -849,6 +864,7 @@ else
         string CorrelationId,
         string? ActionType,
         string? DeviceName,
+        string? EntraDeviceId,
         string? Reason,
         bool IsCollapsedGroup,
         IReadOnlyList<AuditEventRow>? GroupedEvents);
